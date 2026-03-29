@@ -5,6 +5,8 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_windows
   connectivity_plus
+  emoji_picker_flutter
+  firebase_core
   flutter_volume_controller
   permission_handler_windows
   screen_brightness_windows

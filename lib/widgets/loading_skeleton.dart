@@ -56,8 +56,8 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
               colors: [
                 isDark ? AppTheme.darkTertiary : AppTheme.lightTertiary,
                 isDark
-                    ? AppTheme.darkTertiary.withOpacity(0.5)
-                    : AppTheme.lightTertiary.withOpacity(0.5),
+                    ? AppTheme.darkTertiary.withValues(alpha: 0.5)
+                    : AppTheme.lightTertiary.withValues(alpha: 0.5),
                 isDark ? AppTheme.darkTertiary : AppTheme.lightTertiary,
               ],
               stops: [0, _controller.value, 1],

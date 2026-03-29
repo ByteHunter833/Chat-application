@@ -51,7 +51,7 @@ class ProfileScreen extends StatelessWidget {
                       vertical: AppTheme.spacingSm,
                     ),
                     decoration: BoxDecoration(
-                      color: AppTheme.success.withOpacity(0.2),
+                      color: AppTheme.success.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                     ),
                     child: Text(

@@ -31,7 +31,7 @@ class AvatarWidget extends StatelessWidget {
             height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppTheme.primary.withOpacity(0.2),
+              color: AppTheme.primary.withValues(alpha: 0.2),
               image: imageUrl != null
                   ? DecorationImage(
                       image: NetworkImage(imageUrl!),

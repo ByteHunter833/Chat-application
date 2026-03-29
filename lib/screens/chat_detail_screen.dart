@@ -150,10 +150,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => CallScreen(
-                    userName: widget.chat.otherUser.name,
-                    userAvatar: widget.chat.otherUser.avatar ?? '',
-                  ),
+                  builder: (context) => CallPage(callID: widget.chat.id),
                 ),
               );
             },
@@ -164,10 +161,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => CallScreen(
-                    userName: widget.chat.otherUser.name,
-                    userAvatar: widget.chat.otherUser.avatar ?? '',
-                  ),
+                  builder: (context) => CallPage(callID: widget.chat.id),
                 ),
               );
             },
@@ -247,11 +241,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   const SnackBar(content: Text('Attachment feature')),
                 );
               },
-              onEmoji: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Emoji picker feature')),
-                );
-              },
+
               isLoading: _isSending,
             ),
           ),

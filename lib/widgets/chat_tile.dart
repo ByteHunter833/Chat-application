@@ -68,7 +68,6 @@ class _ChatTileState extends State<ChatTile> {
           decoration: BoxDecoration(
             color: isDark ? AppTheme.darkSurface : AppTheme.lightSurface,
             borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            boxShadow: isDark ? AppTheme.darkShadow : AppTheme.lightShadow,
           ),
           padding: const EdgeInsets.all(AppTheme.spacingMd),
           child: Row(
