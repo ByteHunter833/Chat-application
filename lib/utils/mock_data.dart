@@ -5,18 +5,21 @@ class MockData {
     User(
       id: '1',
       name: 'Sarah Anderson',
+      username: 'sarah',
       avatar: 'https://i.pravatar.cc/150?img=1',
       isOnline: true,
     ),
     User(
       id: '2',
       name: 'John Smith',
+      username: 'johnsmith',
       avatar: 'https://i.pravatar.cc/150?img=2',
       isOnline: true,
     ),
     User(
       id: '3',
       name: 'Emma Wilson',
+      username: 'emma',
       avatar: 'https://i.pravatar.cc/150?img=3',
       isOnline: false,
       lastSeen: DateTime.now().subtract(const Duration(minutes: 15)),
@@ -24,12 +27,14 @@ class MockData {
     User(
       id: '4',
       name: 'Michael Chen',
+      username: 'mchen',
       avatar: 'https://i.pravatar.cc/150?img=4',
       isOnline: true,
     ),
     User(
       id: '5',
       name: 'Jessica Brown',
+      username: 'jessica',
       avatar: 'https://i.pravatar.cc/150?img=5',
       isOnline: false,
       lastSeen: DateTime.now().subtract(const Duration(hours: 2)),

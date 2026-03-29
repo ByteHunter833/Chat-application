@@ -1,102 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models.dart';
+import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
-import '../utils/mock_data.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_input_field.dart';
-import '../widgets/typing_indicator.dart';
+import '../widgets/state_widgets.dart';
 import 'call_screen.dart';
 import 'profile_screen.dart';
 
-class ChatDetailScreen extends StatefulWidget {
-  final Chat chat;
-
+class ChatDetailScreen extends ConsumerStatefulWidget {
   const ChatDetailScreen({super.key, required this.chat});
 
+  final Chat chat;
+
   @override
-  State<ChatDetailScreen> createState() => _ChatDetailScreenState();
+  ConsumerState<ChatDetailScreen> createState() => _ChatDetailScreenState();
 }
 
-class _ChatDetailScreenState extends State<ChatDetailScreen> {
-  late TextEditingController _messageController;
-  List<Message> _messages = [];
-  bool _isTyping = false;
-  bool _isSending = false;
+class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
+  late final TextEditingController _messageController;
   final ScrollController _scrollController = ScrollController();
+  bool _isSending = false;
+  int _lastMessageCount = 0;
 
   @override
   void initState() {
     super.initState();
     _messageController = TextEditingController();
-    _loadMessages();
-  }
-
-  void _loadMessages() {
-    _messages = MockData.mockMessages;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-    });
-  }
-
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
-  }
-
-  void _sendMessage() async {
-    if (_messageController.text.isEmpty) return;
-
-    final newMessage = Message(
-      id: DateTime.now().toString(),
-      chatId: widget.chat.id,
-      senderId: 'me',
-      content: _messageController.text,
-      timestamp: DateTime.now(),
-      isRead: false,
-      type: MessageType.text,
-    );
-
-    setState(() {
-      _messages.add(newMessage);
-      _isSending = true;
-    });
-
-    _messageController.clear();
-    _scrollToBottom();
-
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    setState(() {
-      _isTyping = true;
-    });
-
-    await Future.delayed(const Duration(milliseconds: 1000));
-
-    if (mounted) {
-      setState(() {
-        _isTyping = false;
-        _isSending = false;
-        _messages.add(
-          Message(
-            id: DateTime.now().toString(),
-            chatId: widget.chat.id,
-            senderId: widget.chat.otherUser.id,
-            content: 'That sounds great! 😊',
-            timestamp: DateTime.now(),
-            isRead: true,
-            type: MessageType.text,
-          ),
-        );
-      });
-      _scrollToBottom();
-    }
   }
 
   @override
@@ -106,9 +39,73 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     super.dispose();
   }
 
+  Future<void> _sendMessage() async {
+    final currentUser = ref.read(currentAppUserProvider).valueOrNull;
+    final text = _messageController.text.trim();
+    if (currentUser == null || text.isEmpty || _isSending) {
+      return;
+    }
+
+    setState(() {
+      _isSending = true;
+    });
+
+    _messageController.clear();
+
+    try {
+      await ref
+          .read(chatRepositoryProvider)
+          .sendTextMessage(
+            chatId: widget.chat.id,
+            senderId: currentUser.id,
+            text: text,
+          );
+    } catch (error) {
+      _messageController.text = text;
+      _messageController.selection = TextSelection.collapsed(
+        offset: _messageController.text.length,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Message failed: $error')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
+    }
+  }
+
+  void _scrollToBottom() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _scheduleScrollIfNeeded(int messageCount) {
+    if (_lastMessageCount == messageCount) {
+      return;
+    }
+
+    _lastMessageCount = messageCount;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentUser = ref.watch(currentAppUserProvider).valueOrNull;
+    final messagesAsync = ref.watch(messagesProvider(widget.chat.id));
     final statusText = widget.chat.otherUser.isOnline
         ? 'Active now'
         : Formatters.formatLastSeen(widget.chat.otherUser.lastSeen);
@@ -129,6 +126,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   userId: widget.chat.otherUser.id,
                   userName: widget.chat.otherUser.name,
                   userAvatar: widget.chat.otherUser.avatar ?? '',
+                  userHandle: widget.chat.otherUser.handle,
                   isOnline: widget.chat.otherUser.isOnline,
                 ),
               ),
@@ -142,7 +140,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             ],
           ),
         ),
-        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.call),
@@ -150,7 +147,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => CallPage(callID: widget.chat.id),
+                  builder: (_) => CallPage(callID: widget.chat.id),
                 ),
               );
             },
@@ -161,69 +158,52 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => CallPage(callID: widget.chat.id),
+                  builder: (_) => CallPage(callID: widget.chat.id),
                 ),
               );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('More options')));
             },
           ),
         ],
       ),
       body: Column(
         children: [
-          // Messages List
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMd),
-              itemCount: _messages.length + (_isTyping ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _messages.length && _isTyping) {
-                  return Padding(
-                    padding: const EdgeInsets.only(
-                      left: AppTheme.spacingLg,
-                      top: AppTheme.spacingSm,
-                      bottom: AppTheme.spacingSm,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? AppTheme.receivedBubbleBgDark
-                                : AppTheme.receivedBubbleBg,
-                            borderRadius: BorderRadius.circular(
-                              AppTheme.radiusLg,
-                            ),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppTheme.spacingMd,
-                            vertical: AppTheme.spacingMd,
-                          ),
-                          child: const TypingIndicator(),
-                        ),
-                      ],
-                    ),
+            child: messagesAsync.when(
+              data: (messages) {
+                _scheduleScrollIfNeeded(messages.length);
+
+                if (messages.isEmpty) {
+                  return const EmptyStateWidget(
+                    title: 'No messages yet',
+                    subtitle:
+                        'This chat is ready. Send the first message to start the conversation.',
+                    icon: Icons.forum_outlined,
                   );
                 }
 
-                final message = _messages[index];
-                return MessageBubble(
-                  message: message,
-                  isOwn: message.senderId == 'me',
-                  showTimestamp: true,
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppTheme.spacingMd,
+                  ),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final message = messages[index];
+                    return MessageBubble(
+                      message: message,
+                      isOwn: message.senderId == currentUser?.id,
+                    );
+                  },
                 );
               },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stackTrace) => ErrorStateWidget(
+                title: 'Unable to load messages',
+                subtitle: error.toString(),
+                onRetry: () => ref.invalidate(messagesProvider(widget.chat.id)),
+              ),
             ),
           ),
-          // Message Input
           Container(
             decoration: BoxDecoration(
               color: isDark ? AppTheme.darkSurface : AppTheme.lightSurface,
@@ -238,10 +218,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               onSend: _sendMessage,
               onAttach: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Attachment feature')),
+                  const SnackBar(
+                    content: Text('Media upload can be added next.'),
+                  ),
                 );
               },
-
               isLoading: _isSending,
             ),
           ),

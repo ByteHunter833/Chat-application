@@ -1,90 +1,118 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models.dart';
+import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
-import '../utils/mock_data.dart';
 import '../widgets/chat_tile.dart';
 import '../widgets/loading_skeleton.dart';
+import '../widgets/start_chat_sheet.dart';
+import '../widgets/state_widgets.dart';
 import 'chat_detail_screen.dart';
 
-class ChatListScreen extends StatefulWidget {
-  final VoidCallback onThemeToggle;
-
-  const ChatListScreen({super.key, required this.onThemeToggle});
+class ChatListScreen extends ConsumerStatefulWidget {
+  const ChatListScreen({super.key});
 
   @override
-  State<ChatListScreen> createState() => _ChatListScreenState();
+  ConsumerState<ChatListScreen> createState() => _ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class _ChatListScreenState extends ConsumerState<ChatListScreen> {
   final TextEditingController _searchController = TextEditingController();
-  List<Chat> _chats = [];
-  List<Chat> _filteredChats = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadChats();
-    _searchController.addListener(_filterChats);
-  }
-
-  Future<void> _loadChats() async {
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    setState(() {
-      _chats = MockData.mockChats;
-      _filteredChats = _chats;
-      _isLoading = false;
-    });
-  }
-
-  void _filterChats() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      if (query.isEmpty) {
-        _filteredChats = _chats;
-      } else {
-        _filteredChats = _chats
-            .where(
-              (chat) =>
-                  chat.otherUser.name.toLowerCase().contains(query) ||
-                  (chat.lastMessage?.content.toLowerCase().contains(query) ??
-                      false),
-            )
-            .toList();
-      }
+    _searchController.addListener(_handleSearchChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(ref.read(authRepositoryProvider).setPresence(isOnline: true));
     });
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _searchController
+      ..removeListener(_handleSearchChange)
+      ..dispose();
     super.dispose();
+  }
+
+  void _handleSearchChange() {
+    setState(() {});
+  }
+
+  Future<void> _showStartChatSheet() async {
+    final chat = await showModalBottomSheet<Chat>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? AppTheme.darkSurface
+          : AppTheme.lightSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => const StartChatSheet(),
+    );
+
+    if (!mounted || chat == null) {
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ChatDetailScreen(chat: chat)),
+    );
+  }
+
+  Future<void> _signOut() async {
+    await ref.read(authControllerProvider.notifier).signOut();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pinnedChats = _filteredChats.where((c) => c.isPinned).toList();
-    final regularChats = _filteredChats.where((c) => !c.isPinned).toList();
+    final themeMode = ref.watch(themeModeProvider);
+    final currentUser = ref.watch(currentAppUserProvider).valueOrNull;
+    final chatsAsync = ref.watch(chatsProvider);
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
       appBar: AppBar(
-        title: const Text('Messages'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Messages'),
+            if (currentUser != null)
+              Text(
+                currentUser.handle,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+          ],
+        ),
         elevation: 0,
         actions: [
           IconButton(
-            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-            onPressed: widget.onThemeToggle,
+            icon: Icon(
+              themeMode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode,
+            ),
+            onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'sign_out') {
+                _signOut();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<String>(value: 'sign_out', child: Text('Sign out')),
+            ],
           ),
         ],
       ),
       body: Column(
         children: [
-          // Search Bar
           Padding(
             padding: const EdgeInsets.all(AppTheme.spacingLg),
             child: Container(
@@ -93,73 +121,94 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 borderRadius: BorderRadius.circular(AppTheme.radiusXl),
                 border: Border.all(
                   color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
-                  width: 1,
                 ),
               ),
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
-                  hintText: 'Search conversations...',
+                  hintText: 'Search by name or message...',
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: AppTheme.spacingMd,
                     vertical: AppTheme.spacingMd,
                   ),
-                  prefixIcon: Icon(Icons.search, color: AppTheme.primary),
+                  prefixIcon: const Icon(Icons.search, color: AppTheme.primary),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.close),
-                          onPressed: () {
-                            _searchController.clear();
-                          },
+                          onPressed: _searchController.clear,
                         )
                       : null,
                 ),
               ),
             ),
           ),
-          // Chat List
           Expanded(
-            child: _isLoading
-                ? _buildLoadingState()
-                : _buildListContent(pinnedChats, regularChats, isDark),
+            child: chatsAsync.when(
+              data: (chats) => _buildChatsList(
+                context,
+                chats: _filterChats(chats),
+                isDark: isDark,
+              ),
+              loading: () => ListView.builder(
+                itemCount: 6,
+                itemBuilder: (context, index) => const ChatTileSkeleton(),
+              ),
+              error: (error, stackTrace) => ErrorStateWidget(
+                title: 'Unable to load chats',
+                subtitle: error.toString(),
+                onRetry: () => ref.invalidate(chatsProvider),
+              ),
+            ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppTheme.primary,
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Start new chat feature'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        },
-        child: const Icon(Icons.message, color: Colors.white),
+        onPressed: _showStartChatSheet,
+        icon: const Icon(Icons.alternate_email_rounded, color: Colors.white),
+        label: const Text(
+          'New chat',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }
 
-  Widget _buildLoadingState() {
-    return ListView.builder(
-      itemCount: 6,
-      itemBuilder: (context, index) => const ChatTileSkeleton(),
-    );
+  List<Chat> _filterChats(List<Chat> chats) {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return chats;
+    }
+
+    return chats.where((chat) {
+      return chat.otherUser.name.toLowerCase().contains(query) ||
+          chat.otherUser.username.toLowerCase().contains(query) ||
+          (chat.lastMessage?.content.toLowerCase().contains(query) ?? false);
+    }).toList();
   }
 
-  Widget _buildListContent(
-    List<Chat> pinnedChats,
-    List<Chat> regularChats,
-    bool isDark,
-  ) {
-    if (_filteredChats.isEmpty) {
-      return _buildEmptyState(isDark);
+  Widget _buildChatsList(
+    BuildContext context, {
+    required List<Chat> chats,
+    required bool isDark,
+  }) {
+    if (chats.isEmpty) {
+      return EmptyStateWidget(
+        title: 'No conversations yet',
+        subtitle:
+            'Find people by their @username and start a direct message thread.',
+        icon: Icons.alternate_email_rounded,
+        onAction: _showStartChatSheet,
+        actionLabel: 'Start chat',
+      );
     }
+
+    final pinnedChats = chats.where((chat) => chat.isPinned).toList();
+    final regularChats = chats.where((chat) => !chat.isPinned).toList();
 
     return CustomScrollView(
       slivers: [
-        // Pinned Chats Section
         if (pinnedChats.isNotEmpty)
           SliverToBoxAdapter(
             child: Padding(
@@ -180,38 +229,24 @@ class _ChatListScreenState extends State<ChatListScreen> {
             final chat = pinnedChats[index];
             return ChatTile(
               chat: chat,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChatDetailScreen(chat: chat),
-                  ),
-                );
-              },
-              onDelete: () {
-                _deletChat(chat);
-              },
-              onMute: () {
-                _muteChat(chat);
-              },
-              onPin: () {
-                _togglePin(chat);
-              },
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => ChatDetailScreen(chat: chat)),
+              ),
             );
           }, childCount: pinnedChats.length),
         ),
-        // Regular Chats Section
         if (regularChats.isNotEmpty)
           SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.only(
+              padding: const EdgeInsets.only(
                 left: AppTheme.spacingLg,
                 right: AppTheme.spacingLg,
-                top: regularChats.isEmpty ? 0 : AppTheme.spacingMd,
+                top: AppTheme.spacingMd,
                 bottom: AppTheme.spacingSm,
               ),
               child: Text(
-                'All Messages',
+                'All messages',
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
@@ -221,117 +256,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
             final chat = regularChats[index];
             return ChatTile(
               chat: chat,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChatDetailScreen(chat: chat),
-                  ),
-                );
-              },
-              onDelete: () {
-                _deletChat(chat);
-              },
-              onMute: () {
-                _muteChat(chat);
-              },
-              onPin: () {
-                _togglePin(chat);
-              },
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => ChatDetailScreen(chat: chat)),
+              ),
             );
           }, childCount: regularChats.length),
         ),
       ],
     );
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.chat_bubble_outline,
-            size: 64,
-            color: isDark
-                ? AppTheme.darkTextSecondary
-                : AppTheme.lightTextSecondary,
-          ),
-          const SizedBox(height: AppTheme.spacingXl),
-          Text(
-            'No conversations yet',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppTheme.spacingSm),
-          Text(
-            'Start a new chat to begin messaging',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: AppTheme.spacingXl),
-          ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('New chat feature'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-            child: const Text('Start Chat'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _deletChat(Chat chat) {
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (mounted) {
-        setState(() {
-          _chats.removeWhere((c) => c.id == chat.id);
-          _filteredChats.removeWhere((c) => c.id == chat.id);
-        });
-      }
-    });
-  }
-
-  void _muteChat(Chat chat) {
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (mounted) {
-        setState(() {
-          final index = _chats.indexWhere((c) => c.id == chat.id);
-          if (index != -1) {
-            _chats[index] = Chat(
-              id: chat.id,
-              otherUser: chat.otherUser,
-              lastMessage: chat.lastMessage,
-              unreadCount: chat.unreadCount,
-              isPinned: chat.isPinned,
-              isMuted: !chat.isMuted,
-              createdAt: chat.createdAt,
-            );
-            _filterChats();
-          }
-        });
-      }
-    });
-  }
-
-  void _togglePin(Chat chat) {
-    setState(() {
-      final index = _chats.indexWhere((c) => c.id == chat.id);
-      if (index != -1) {
-        _chats[index] = Chat(
-          id: chat.id,
-          otherUser: chat.otherUser,
-          lastMessage: chat.lastMessage,
-          unreadCount: chat.unreadCount,
-          isPinned: !chat.isPinned,
-          isMuted: chat.isMuted,
-          createdAt: chat.createdAt,
-        );
-        _filterChats();
-      }
-    });
   }
 }

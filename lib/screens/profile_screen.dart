@@ -7,6 +7,7 @@ class ProfileScreen extends StatelessWidget {
   final String userId;
   final String userName;
   final String userAvatar;
+  final String? userHandle;
   final bool isOnline;
 
   const ProfileScreen({
@@ -14,6 +15,7 @@ class ProfileScreen extends StatelessWidget {
     required this.userId,
     required this.userName,
     required this.userAvatar,
+    this.userHandle,
     required this.isOnline,
   });
 
@@ -44,6 +46,17 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AppTheme.spacingXl),
                   Text(userName, style: Theme.of(context).textTheme.titleLarge),
+                  if (userHandle != null) ...[
+                    const SizedBox(height: AppTheme.spacingXs),
+                    Text(
+                      userHandle!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: isDark
+                            ? AppTheme.darkTextSecondary
+                            : AppTheme.lightTextSecondary,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: AppTheme.spacingSm),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -166,7 +179,7 @@ class ProfileScreen extends StatelessWidget {
         children: [
           _buildInfoRow(context, 'User ID', userId),
           const Divider(height: 24),
-          _buildInfoRow(context, 'Username', userName),
+          _buildInfoRow(context, 'Username', userHandle ?? userName),
         ],
       ),
     );

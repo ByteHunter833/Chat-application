@@ -1,35 +1,32 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'screens/chat_list_screen.dart';
+import 'firebase_options.dart';
+import 'providers/app_providers.dart';
+import 'screens/app_root.dart';
 import 'theme/app_theme.dart';
 
-void main() {
-  runApp(const ChatApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(const ProviderScope(child: ChatApp()));
 }
 
-class ChatApp extends StatefulWidget {
+class ChatApp extends ConsumerWidget {
   const ChatApp({super.key});
 
   @override
-  State<ChatApp> createState() => _ChatAppState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
 
-class _ChatAppState extends State<ChatApp> {
-  bool _isDarkMode = false;
-
-  @override
-  Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Chat',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: ChatListScreen(
-        onThemeToggle: () {
-          setState(() => _isDarkMode = !_isDarkMode);
-        },
-      ),
+      themeMode: themeMode,
+      home: const AppRoot(),
     );
   }
 }

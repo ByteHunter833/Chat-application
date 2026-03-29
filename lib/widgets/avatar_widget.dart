@@ -21,6 +21,9 @@ class AvatarWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final effectiveImageUrl = (imageUrl?.trim().isEmpty ?? true)
+        ? null
+        : imageUrl;
 
     return GestureDetector(
       onTap: onTap,
@@ -32,14 +35,14 @@ class AvatarWidget extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: AppTheme.primary.withValues(alpha: 0.2),
-              image: imageUrl != null
+              image: effectiveImageUrl != null
                   ? DecorationImage(
-                      image: NetworkImage(imageUrl!),
+                      image: NetworkImage(effectiveImageUrl),
                       fit: BoxFit.cover,
                     )
                   : null,
             ),
-            child: imageUrl == null
+            child: effectiveImageUrl == null
                 ? Center(
                     child: Text(
                       initials,
