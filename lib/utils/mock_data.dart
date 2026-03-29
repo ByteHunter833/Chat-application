@@ -1,0 +1,171 @@
+import '../models/models.dart';
+
+class MockData {
+  static final List<User> mockUsers = [
+    User(
+      id: '1',
+      name: 'Sarah Anderson',
+      avatar: 'https://i.pravatar.cc/150?img=1',
+      isOnline: true,
+    ),
+    User(
+      id: '2',
+      name: 'John Smith',
+      avatar: 'https://i.pravatar.cc/150?img=2',
+      isOnline: true,
+    ),
+    User(
+      id: '3',
+      name: 'Emma Wilson',
+      avatar: 'https://i.pravatar.cc/150?img=3',
+      isOnline: false,
+      lastSeen: DateTime.now().subtract(const Duration(minutes: 15)),
+    ),
+    User(
+      id: '4',
+      name: 'Michael Chen',
+      avatar: 'https://i.pravatar.cc/150?img=4',
+      isOnline: true,
+    ),
+    User(
+      id: '5',
+      name: 'Jessica Brown',
+      avatar: 'https://i.pravatar.cc/150?img=5',
+      isOnline: false,
+      lastSeen: DateTime.now().subtract(const Duration(hours: 2)),
+    ),
+  ];
+
+  static final List<Message> mockMessages = [
+    Message(
+      id: '1',
+      chatId: '1',
+      senderId: 'me',
+      content: 'Hey! How are you doing?',
+      timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
+      isRead: true,
+      type: MessageType.text,
+    ),
+    Message(
+      id: '2',
+      chatId: '1',
+      senderId: '1',
+      content: 'I\'m doing great! Just finished a great project 🎉',
+      timestamp: DateTime.now().subtract(const Duration(minutes: 4)),
+      isRead: true,
+      type: MessageType.text,
+    ),
+    Message(
+      id: '3',
+      chatId: '1',
+      senderId: 'me',
+      content: 'That\'s amazing! Tell me more about it',
+      timestamp: DateTime.now().subtract(const Duration(minutes: 3)),
+      isRead: true,
+      type: MessageType.text,
+    ),
+    Message(
+      id: '4',
+      chatId: '1',
+      senderId: '1',
+      content:
+          'It\'s a mobile app for scheduling. The UI is super clean and the animations are smooth.',
+      timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
+      isRead: true,
+      type: MessageType.text,
+    ),
+    Message(
+      id: '5',
+      chatId: '1',
+      senderId: 'me',
+      content: 'Nice! Would love to see it 👀',
+      timestamp: DateTime.now().subtract(const Duration(minutes: 1)),
+      isRead: false,
+      type: MessageType.text,
+    ),
+  ];
+
+  static final List<Chat> mockChats = [
+    Chat(
+      id: '1',
+      otherUser: mockUsers[0],
+      lastMessage: Message(
+        id: 'msg1',
+        chatId: '1',
+        senderId: '1',
+        content: 'Nice! Would love to see it 👀',
+        timestamp: DateTime.now().subtract(const Duration(minutes: 1)),
+        isRead: true,
+        type: MessageType.text,
+      ),
+      unreadCount: 2,
+      isPinned: true,
+      createdAt: DateTime.now().subtract(const Duration(days: 5)),
+    ),
+    Chat(
+      id: '2',
+      otherUser: mockUsers[1],
+      lastMessage: Message(
+        id: 'msg2',
+        chatId: '2',
+        senderId: 'me',
+        content: 'See you tomorrow!',
+        timestamp: DateTime.now().subtract(const Duration(hours: 2)),
+        isRead: true,
+        type: MessageType.text,
+      ),
+      unreadCount: 0,
+      isPinned: false,
+      createdAt: DateTime.now().subtract(const Duration(days: 10)),
+    ),
+    Chat(
+      id: '3',
+      otherUser: mockUsers[2],
+      lastMessage: Message(
+        id: 'msg3',
+        chatId: '3',
+        senderId: '3',
+        content: 'Thanks for the help!',
+        timestamp: DateTime.now().subtract(const Duration(hours: 5)),
+        isRead: true,
+        type: MessageType.text,
+      ),
+      unreadCount: 1,
+      isPinned: false,
+      createdAt: DateTime.now().subtract(const Duration(days: 15)),
+    ),
+    Chat(
+      id: '4',
+      otherUser: mockUsers[3],
+      lastMessage: Message(
+        id: 'msg4',
+        chatId: '4',
+        senderId: '4',
+        content: 'Are you available for a call later?',
+        timestamp: DateTime.now().subtract(const Duration(hours: 1)),
+        isRead: false,
+        type: MessageType.text,
+      ),
+      unreadCount: 0,
+      isPinned: false,
+      isMuted: true,
+      createdAt: DateTime.now().subtract(const Duration(days: 20)),
+    ),
+    Chat(
+      id: '5',
+      otherUser: mockUsers[4],
+      lastMessage: Message(
+        id: 'msg5',
+        chatId: '5',
+        senderId: 'me',
+        content: 'Got it!',
+        timestamp: DateTime.now().subtract(const Duration(days: 1)),
+        isRead: true,
+        type: MessageType.text,
+      ),
+      unreadCount: 0,
+      isPinned: false,
+      createdAt: DateTime.now().subtract(const Duration(days: 30)),
+    ),
+  ];
+}
