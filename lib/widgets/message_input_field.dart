@@ -8,6 +8,7 @@ class MessageInputField extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final VoidCallback? onAttach;
+  final ValueChanged<String>? onChanged;
 
   final bool isLoading;
 
@@ -16,6 +17,7 @@ class MessageInputField extends StatefulWidget {
     required this.controller,
     required this.onSend,
     this.onAttach,
+    this.onChanged,
 
     this.isLoading = false,
   });
@@ -136,6 +138,7 @@ class _MessageInputFieldState extends State<MessageInputField> {
                           maxLines: null,
                           minLines: 1,
                           enabled: !widget.isLoading,
+                          onChanged: widget.onChanged,
                           decoration: InputDecoration(
                             hintText: 'Message...',
                             border: InputBorder.none,

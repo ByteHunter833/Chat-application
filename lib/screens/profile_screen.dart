@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/models.dart';
+import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
 import '../widgets/avatar_widget.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends ConsumerWidget {
   final String userId;
   final String userName;
   final String userAvatar;
   final String? userHandle;
   final bool isOnline;
+  final DateTime? lastSeen;
 
   const ProfileScreen({
     super.key,
@@ -17,11 +22,34 @@ class ProfileScreen extends StatelessWidget {
     required this.userAvatar,
     this.userHandle,
     required this.isOnline,
+    this.lastSeen,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final liveUser = ref.watch(userByIdProvider(userId)).valueOrNull;
+    final presence = ref.watch(userPresenceProvider(userId)).valueOrNull;
+    final displayUser =
+        (liveUser ??
+                User(
+                  id: userId,
+                  name: userName,
+                  username:
+                      userHandle?.replaceFirst('@', '') ??
+                      userName.replaceAll(' ', '').toLowerCase(),
+                  avatar: userAvatar,
+                  isOnline: isOnline,
+                  lastSeen: lastSeen,
+                ))
+            .applyPresence(presence);
+    final statusText = Formatters.formatPresenceStatus(
+      isOnline: displayUser.isOnline,
+      lastSeen: displayUser.lastSeen,
+    );
+    final statusColor = displayUser.isOnline
+        ? AppTheme.success
+        : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary);
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
@@ -39,17 +67,20 @@ class ProfileScreen extends StatelessWidget {
               child: Column(
                 children: [
                   AvatarWidget(
-                    imageUrl: userAvatar,
-                    initials: _getInitials(userName),
+                    imageUrl: displayUser.avatar,
+                    initials: _getInitials(displayUser.name),
                     size: 120,
-                    isOnline: isOnline,
+                    isOnline: displayUser.isOnline,
                   ),
                   const SizedBox(height: AppTheme.spacingXl),
-                  Text(userName, style: Theme.of(context).textTheme.titleLarge),
-                  if (userHandle != null) ...[
+                  Text(
+                    displayUser.name,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  if (displayUser.handle.isNotEmpty) ...[
                     const SizedBox(height: AppTheme.spacingXs),
                     Text(
-                      userHandle!,
+                      displayUser.handle,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: isDark
                             ? AppTheme.darkTextSecondary
@@ -64,13 +95,13 @@ class ProfileScreen extends StatelessWidget {
                       vertical: AppTheme.spacingSm,
                     ),
                     decoration: BoxDecoration(
-                      color: AppTheme.success.withValues(alpha: 0.2),
+                      color: statusColor.withValues(alpha: 0.16),
                       borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                     ),
                     child: Text(
-                      isOnline ? 'Active now' : 'Offline',
+                      statusText,
                       style: TextStyle(
-                        color: AppTheme.success,
+                        color: statusColor,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -108,7 +139,7 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppTheme.spacingXl),
             // Info Section
-            _buildInfoSection(context),
+            _buildInfoSection(context, displayUser),
             const SizedBox(height: AppTheme.spacingXl),
             // Actions
             _buildMenuButton(
@@ -165,7 +196,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoSection(BuildContext context) {
+  Widget _buildInfoSection(BuildContext context, User displayUser) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -179,7 +210,7 @@ class ProfileScreen extends StatelessWidget {
         children: [
           _buildInfoRow(context, 'User ID', userId),
           const Divider(height: 24),
-          _buildInfoRow(context, 'Username', userHandle ?? userName),
+          _buildInfoRow(context, 'Username', displayUser.handle),
         ],
       ),
     );

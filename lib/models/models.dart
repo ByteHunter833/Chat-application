@@ -78,9 +78,35 @@ class User {
       createdAt: createdAt ?? this.createdAt,
     );
   }
+
+  User applyPresence(UserPresence? presence) {
+    if (presence == null) {
+      return this;
+    }
+
+    return copyWith(
+      isOnline: presence.isOnline,
+      lastSeen: presence.lastSeen ?? lastSeen,
+    );
+  }
 }
 
-enum MessageType { text, image, voice, video }
+enum MessageType { text, image, voice, video, file, system }
+
+class UserPresence {
+  const UserPresence({required this.isOnline, this.lastSeen});
+
+  final bool isOnline;
+  final DateTime? lastSeen;
+
+  factory UserPresence.fromMap(Map<Object?, Object?> map) {
+    final state = (map['state'] as String?)?.toLowerCase();
+    return UserPresence(
+      isOnline: state == 'online',
+      lastSeen: _asDateTime(map['last_changed']),
+    );
+  }
+}
 
 class Message {
   final String id;
@@ -91,6 +117,9 @@ class Message {
   final bool isRead;
   final MessageType type;
   final String? mediaUrl;
+  final String? fileName;
+  final String? mimeType;
+  final int? fileSize;
 
   Message({
     required this.id,
@@ -101,6 +130,9 @@ class Message {
     this.isRead = false,
     this.type = MessageType.text,
     this.mediaUrl,
+    this.fileName,
+    this.mimeType,
+    this.fileSize,
   });
 
   factory Message.fromMap(Map<String, dynamic> map, String id) {
@@ -113,6 +145,9 @@ class Message {
       isRead: map['isRead'] as bool? ?? false,
       type: _messageTypeFromString(map['type'] as String?),
       mediaUrl: map['mediaUrl'] as String?,
+      fileName: map['fileName'] as String?,
+      mimeType: map['mimeType'] as String?,
+      fileSize: (map['fileSize'] as num?)?.toInt(),
     );
   }
 
@@ -125,6 +160,9 @@ class Message {
       'isRead': isRead,
       'type': type.name,
       'mediaUrl': mediaUrl,
+      'fileName': fileName,
+      'mimeType': mimeType,
+      'fileSize': fileSize,
     };
   }
 
@@ -137,6 +175,9 @@ class Message {
     bool? isRead,
     MessageType? type,
     String? mediaUrl,
+    String? fileName,
+    String? mimeType,
+    int? fileSize,
   }) {
     return Message(
       id: id ?? this.id,
@@ -147,6 +188,9 @@ class Message {
       isRead: isRead ?? this.isRead,
       type: type ?? this.type,
       mediaUrl: mediaUrl ?? this.mediaUrl,
+      fileName: fileName ?? this.fileName,
+      mimeType: mimeType ?? this.mimeType,
+      fileSize: fileSize ?? this.fileSize,
     );
   }
 }
@@ -178,10 +222,19 @@ class Chat {
     required String id,
     required Map<String, dynamic> map,
     required User otherUser,
+    String? currentUserId,
   }) {
     final createdAt = _asDateTime(map['createdAt']) ?? DateTime.now();
     final updatedAt = _asDateTime(map['updatedAt']) ?? createdAt;
     final lastMessageText = (map['lastMessageText'] as String?)?.trim();
+    final unreadCounts = Map<String, dynamic>.from(
+      map['unreadCounts'] as Map? ?? const <String, dynamic>{},
+    );
+    final unreadCount = currentUserId == null
+        ? (map['unreadCount'] as int? ?? 0)
+        : (unreadCounts[currentUserId] as int? ??
+              map['unreadCount'] as int? ??
+              0);
 
     Message? lastMessage;
     if (lastMessageText != null && lastMessageText.isNotEmpty) {
@@ -200,7 +253,7 @@ class Chat {
       id: id,
       otherUser: otherUser,
       lastMessage: lastMessage,
-      unreadCount: map['unreadCount'] as int? ?? 0,
+      unreadCount: unreadCount,
       isPinned: map['isPinned'] as bool? ?? false,
       isMuted: map['isMuted'] as bool? ?? false,
       createdAt: createdAt,
@@ -260,6 +313,12 @@ DateTime? _asDateTime(dynamic value) {
   }
   if (value is String) {
     return DateTime.tryParse(value);
+  }
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+  if (value is num) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt());
   }
   return null;
 }

@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/models.dart';
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
+import '../utils/call_invitation_service.dart';
+import '../utils/push_notification_service.dart';
 import 'auth_screen.dart';
 import 'chat_list_screen.dart';
 
@@ -29,7 +34,10 @@ class AppRoot extends ConsumerWidget {
               );
             }
 
-            return const ChatListScreen();
+            return _CallInvitationInitializer(
+              currentUser: appUser,
+              child: const ChatListScreen(),
+            );
           },
           loading: () => const _AppLoadingState(
             title: 'Loading chats',
@@ -55,6 +63,106 @@ class AppRoot extends ConsumerWidget {
         },
       ),
     );
+  }
+}
+
+class _CallInvitationInitializer extends ConsumerStatefulWidget {
+  const _CallInvitationInitializer({
+    required this.currentUser,
+    required this.child,
+  });
+
+  final User currentUser;
+  final Widget child;
+
+  @override
+  ConsumerState<_CallInvitationInitializer> createState() =>
+      _CallInvitationInitializerState();
+}
+
+class _CallInvitationInitializerState
+    extends ConsumerState<_CallInvitationInitializer>
+    with WidgetsBindingObserver {
+  bool? _isOnline;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initialize();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CallInvitationInitializer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentUser.id != widget.currentUser.id) {
+      _isOnline = null;
+      _initialize();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(
+      PushNotificationService.clearSession(userId: widget.currentUser.id),
+    );
+    CallInvitationService.disposeLater();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        unawaited(_setPresence(isOnline: true));
+        break;
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        unawaited(_setPresence(isOnline: false));
+        break;
+      case AppLifecycleState.inactive:
+        break;
+    }
+  }
+
+  Future<void> _initialize() async {
+    await ref.read(authRepositoryProvider).bindPresence(widget.currentUser.id);
+    await _setPresence(isOnline: true);
+    await PushNotificationService.syncUserSession(widget.currentUser);
+    await CallInvitationService.ensureInitialized(
+      widget.currentUser,
+      onCallStatusChanged: (statusMessage) async {
+        await ref
+            .read(chatRepositoryProvider)
+            .sendSystemMessage(
+              chatId: statusMessage.chatId,
+              senderId: widget.currentUser.id,
+              text: statusMessage.text,
+              messageId: statusMessage.messageId,
+            );
+      },
+    );
+  }
+
+  Future<void> _setPresence({required bool isOnline}) async {
+    if (_isOnline == isOnline) {
+      return;
+    }
+
+    final previousValue = _isOnline;
+    _isOnline = isOnline;
+    try {
+      await ref.read(authRepositoryProvider).setPresence(isOnline: isOnline);
+    } catch (_) {
+      _isOnline = previousValue;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
   }
 }
 

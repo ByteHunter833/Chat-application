@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 
 import '../providers/app_providers.dart';
+import '../utils/call_invitation_service.dart';
 
 class CallPage extends ConsumerWidget {
-  const CallPage({super.key, required this.callID});
+  const CallPage({super.key, required this.callID, this.isVideoCall = true});
 
   final String callID;
+  final bool isVideoCall;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -17,13 +19,23 @@ class CallPage extends ConsumerWidget {
     }
 
     return ZegoUIKitPrebuiltCall(
-      appID: 1138717761,
-      appSign:
-          '4364cdd8f3ffdccdc1e7877a83d9fe4700e3e4e63784b9a9a6b9e5f6cc136ddb',
+      appID: zegoAppId,
+      appSign: zegoAppSign,
       userID: currentUser.id,
       userName: currentUser.username,
       callID: callID,
-      config: ZegoUIKitPrebuiltCallConfig.oneOnOneVideoCall(),
+      config: (() {
+        final config = isVideoCall
+            ? ZegoUIKitPrebuiltCallConfig.oneOnOneVideoCall()
+            : ZegoUIKitPrebuiltCallConfig.oneOnOneVoiceCall();
+        config.turnOnCameraWhenJoining = isVideoCall;
+        config.turnOnMicrophoneWhenJoining = true;
+        config.useSpeakerWhenJoining = true;
+        config.audioVideoView.showCameraStateOnView = true;
+        config.audioVideoView.showUserNameOnView = true;
+        config.audioVideoView.useVideoViewAspectFill = true;
+        return config;
+      })(),
     );
   }
 }

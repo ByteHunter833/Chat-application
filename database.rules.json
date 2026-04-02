@@ -1,0 +1,17 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    "status": {
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "typing": {
+      "$chatId": {
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      }
+    }
+  }
+}

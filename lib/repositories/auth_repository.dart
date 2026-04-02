@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:firebase_database/firebase_database.dart';
 
 import '../models/models.dart';
 
@@ -7,11 +10,16 @@ class AuthRepository {
   AuthRepository({
     required FirebaseFirestore firestore,
     required auth.FirebaseAuth firebaseAuth,
+    required FirebaseDatabase realtimeDatabase,
   }) : _firestore = firestore,
-       _firebaseAuth = firebaseAuth;
+       _firebaseAuth = firebaseAuth,
+       _realtimeDatabase = realtimeDatabase;
 
   final FirebaseFirestore _firestore;
   final auth.FirebaseAuth _firebaseAuth;
+  final FirebaseDatabase _realtimeDatabase;
+  StreamSubscription<DatabaseEvent>? _presenceConnectionSubscription;
+  String? _boundPresenceUserId;
 
   Stream<auth.User?> authStateChanges() {
     return _firebaseAuth.authStateChanges();
@@ -105,6 +113,7 @@ class AuthRepository {
 
   Future<void> signOut() async {
     await setPresence(isOnline: false);
+    await _clearPresenceBinding();
     await _firebaseAuth.signOut();
   }
 
@@ -114,10 +123,73 @@ class AuthRepository {
       return;
     }
 
+    final statusRef = _realtimeDatabase.ref('status/${firebaseUser.uid}');
+    final payload = <String, Object?>{
+      'state': isOnline ? 'online' : 'offline',
+      'last_changed': ServerValue.timestamp,
+    };
+
+    await statusRef.set(payload);
+    if (isOnline) {
+      await statusRef.onDisconnect().set({
+        'state': 'offline',
+        'last_changed': ServerValue.timestamp,
+      });
+    } else {
+      await statusRef.onDisconnect().cancel();
+    }
+
     await _firestore.collection('users').doc(firebaseUser.uid).set({
       'isOnline': isOnline,
       'lastSeen': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  Stream<UserPresence?> watchPresence(String uid) {
+    return _realtimeDatabase.ref('status/$uid').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map<Object?, Object?>) {
+        return null;
+      }
+      return UserPresence.fromMap(raw);
+    });
+  }
+
+  Future<void> bindPresence(String uid) async {
+    if (_boundPresenceUserId == uid) {
+      return;
+    }
+
+    await _clearPresenceBinding();
+    _boundPresenceUserId = uid;
+
+    final connectionRef = _realtimeDatabase.ref('.info/connected');
+    final statusRef = _realtimeDatabase.ref('status/$uid');
+    _presenceConnectionSubscription = connectionRef.onValue.listen((event) {
+      final connected = event.snapshot.value as bool? ?? false;
+      if (!connected) {
+        return;
+      }
+
+      unawaited(
+        statusRef.onDisconnect().set({
+          'state': 'offline',
+          'last_changed': ServerValue.timestamp,
+        }),
+      );
+      unawaited(
+        statusRef.set({
+          'state': 'online',
+          'last_changed': ServerValue.timestamp,
+        }),
+      );
+    });
+  }
+
+  Future<void> _clearPresenceBinding() async {
+    _boundPresenceUserId = null;
+    await _presenceConnectionSubscription?.cancel();
+    _presenceConnectionSubscription = null;
   }
 
   static String normalizeUsername(String input) {

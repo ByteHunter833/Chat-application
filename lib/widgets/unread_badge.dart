@@ -12,17 +12,20 @@ class UnreadBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (count == 0) return const SizedBox.shrink();
 
+    final label = count > 99 ? '99+' : count.toString();
+
     return Container(
-      width: size,
       height: size,
+      constraints: BoxConstraints(minWidth: size),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
+        borderRadius: BorderRadius.circular(size),
         color: AppTheme.error,
         boxShadow: AppTheme.lightShadow,
       ),
       child: Center(
         child: Text(
-          count > 99 ? '99+' : count.toString(),
+          label,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 10,

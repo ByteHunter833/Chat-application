@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,9 +24,6 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_handleSearchChange);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(ref.read(authRepositoryProvider).setPresence(isOnline: true));
-    });
   }
 
   @override

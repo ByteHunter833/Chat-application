@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models.dart';
+import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 import 'avatar_widget.dart';
 import 'unread_badge.dart';
 
-class ChatTile extends StatefulWidget {
+class ChatTile extends ConsumerWidget {
   final Chat chat;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
@@ -23,17 +25,32 @@ class ChatTile extends StatefulWidget {
   });
 
   @override
-  State<ChatTile> createState() => _ChatTileState();
-}
-
-class _ChatTileState extends State<ChatTile> {
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final canSwipeActions = widget.onDelete != null || widget.onMute != null;
+    final liveUser = ref.watch(userByIdProvider(chat.otherUser.id)).valueOrNull;
+    final presence = ref
+        .watch(userPresenceProvider(chat.otherUser.id))
+        .valueOrNull;
+    final otherUser = (liveUser ?? chat.otherUser).applyPresence(presence);
+    final isTyping =
+        ref
+            .watch(
+              chatTypingProvider((
+                chatId: chat.id,
+                otherUserId: chat.otherUser.id,
+              )),
+            )
+            .valueOrNull ??
+        false;
+    final canSwipeActions = onDelete != null || onMute != null;
+    final previewText = isTyping
+        ? 'typing...'
+        : Formatters.formatMessagePreview(
+            chat.lastMessage?.content ?? otherUser.handle,
+          );
 
     final tileContent = GestureDetector(
-      onTap: widget.onTap,
+      onTap: onTap,
       child: Container(
         margin: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingLg,
@@ -49,12 +66,12 @@ class _ChatTileState extends State<ChatTile> {
             Stack(
               children: [
                 AvatarWidget(
-                  imageUrl: widget.chat.otherUser.avatar,
-                  initials: _getInitials(widget.chat.otherUser.name),
+                  imageUrl: otherUser.avatar,
+                  initials: _getInitials(otherUser.name),
                   size: 56,
-                  isOnline: widget.chat.otherUser.isOnline,
+                  isOnline: otherUser.isOnline,
                 ),
-                if (widget.chat.isPinned)
+                if (chat.isPinned)
                   Positioned(
                     top: -4,
                     left: -4,
@@ -84,7 +101,7 @@ class _ChatTileState extends State<ChatTile> {
                     children: [
                       Expanded(
                         child: Text(
-                          widget.chat.otherUser.name,
+                          otherUser.name,
                           style: Theme.of(context).textTheme.titleMedium,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -92,8 +109,7 @@ class _ChatTileState extends State<ChatTile> {
                       ),
                       Text(
                         Formatters.formatChatListTime(
-                          widget.chat.lastMessage?.timestamp ??
-                              widget.chat.updatedAt,
+                          chat.lastMessage?.timestamp ?? chat.updatedAt,
                         ),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
@@ -104,18 +120,22 @@ class _ChatTileState extends State<ChatTile> {
                     children: [
                       Expanded(
                         child: Text(
-                          widget.chat.lastMessage?.content ??
-                              widget.chat.otherUser.handle,
+                          previewText,
                           style: TextStyle(
-                            color: widget.chat.unreadCount > 0
-                                ? (isDark
-                                      ? AppTheme.darkTextPrimary
-                                      : AppTheme.lightTextPrimary)
-                                : (isDark
-                                      ? AppTheme.darkTextSecondary
-                                      : AppTheme.lightTextSecondary),
+                            color: isTyping
+                                ? AppTheme.primary
+                                : (chat.unreadCount > 0
+                                      ? (isDark
+                                            ? AppTheme.darkTextPrimary
+                                            : AppTheme.lightTextPrimary)
+                                      : (isDark
+                                            ? AppTheme.darkTextSecondary
+                                            : AppTheme.lightTextSecondary)),
                             fontSize: 13,
-                            fontWeight: widget.chat.unreadCount > 0
+                            fontStyle: isTyping
+                                ? FontStyle.italic
+                                : FontStyle.normal,
+                            fontWeight: chat.unreadCount > 0
                                 ? FontWeight.w500
                                 : FontWeight.w400,
                           ),
@@ -123,7 +143,7 @@ class _ChatTileState extends State<ChatTile> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (widget.chat.isMuted)
+                      if (chat.isMuted)
                         Padding(
                           padding: const EdgeInsets.only(left: 8),
                           child: Icon(
@@ -140,7 +160,7 @@ class _ChatTileState extends State<ChatTile> {
               ),
             ),
             const SizedBox(width: AppTheme.spacingMd),
-            UnreadBadge(count: widget.chat.unreadCount),
+            UnreadBadge(count: chat.unreadCount),
           ],
         ),
       ),
@@ -151,7 +171,7 @@ class _ChatTileState extends State<ChatTile> {
     }
 
     return Dismissible(
-      key: Key(widget.chat.id),
+      key: Key(chat.id),
       background: Container(
         color: AppTheme.warning,
         alignment: Alignment.centerLeft,
@@ -167,18 +187,17 @@ class _ChatTileState extends State<ChatTile> {
       resizeDuration: const Duration(milliseconds: 300),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
-          if (widget.onMute == null) {
+          if (onMute == null) {
             return false;
           }
-          widget.onMute?.call();
+          onMute?.call();
           return false;
         }
-        return direction == DismissDirection.endToStart &&
-            widget.onDelete != null;
+        return direction == DismissDirection.endToStart && onDelete != null;
       },
       onDismissed: (direction) {
         if (direction == DismissDirection.endToStart) {
-          widget.onDelete?.call();
+          onDelete?.call();
         }
       },
       child: tileContent,

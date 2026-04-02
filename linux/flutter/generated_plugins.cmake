@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_linux
   emoji_picker_flutter
   flutter_volume_controller
+  gtk
   url_launcher_linux
   zego_express_engine
 )
