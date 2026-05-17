@@ -20,7 +20,6 @@ class AvatarWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final effectiveImageUrl = (imageUrl?.trim().isEmpty ?? true)
         ? null
         : imageUrl;
@@ -55,25 +54,6 @@ class AvatarWidget extends StatelessWidget {
                   )
                 : null,
           ),
-          if (isOnline)
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: Container(
-                width: size * 0.3,
-                height: size * 0.3,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.success,
-                  border: Border.all(
-                    color: isDark
-                        ? AppTheme.darkSurface
-                        : AppTheme.lightSurface,
-                    width: 2,
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );

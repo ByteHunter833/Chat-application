@@ -10,7 +10,6 @@ import 'providers/app_providers.dart';
 import 'screens/app_root.dart';
 import 'theme/app_theme.dart';
 import 'utils/app_navigator.dart';
-import 'utils/call_invitation_service.dart';
 import 'utils/push_notification_service.dart';
 
 Future<void> main() async {
@@ -23,7 +22,6 @@ Future<void> main() async {
       anonKey: AppConfig.supabaseAnonKey,
     );
   }
-  CallInvitationService.registerNavigator();
   runApp(const ProviderScope(child: ChatApp()));
 }
 

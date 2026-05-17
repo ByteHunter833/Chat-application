@@ -79,7 +79,6 @@ class AppTheme {
       seedColor: primary,
       brightness: Brightness.light,
       surface: lightSurface,
-      background: lightBg,
     ),
     textTheme: const TextTheme(
       bodyLarge: TextStyle(
@@ -172,7 +171,6 @@ class AppTheme {
       seedColor: primary,
       brightness: Brightness.dark,
       surface: darkSurface,
-      background: darkBg,
     ),
     textTheme: const TextTheme(
       bodyLarge: TextStyle(

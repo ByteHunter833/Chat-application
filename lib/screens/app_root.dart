@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models.dart';
 import '../providers/app_providers.dart';
+import '../repositories/auth_repository.dart';
 import '../theme/app_theme.dart';
-import '../utils/call_invitation_service.dart';
 import '../utils/push_notification_service.dart';
 import 'auth_screen.dart';
 import 'chat_list_screen.dart';
@@ -34,7 +34,7 @@ class AppRoot extends ConsumerWidget {
               );
             }
 
-            return _CallInvitationInitializer(
+            return _SessionInitializer(
               currentUser: appUser,
               child: const ChatListScreen(),
             );
@@ -66,34 +66,33 @@ class AppRoot extends ConsumerWidget {
   }
 }
 
-class _CallInvitationInitializer extends ConsumerStatefulWidget {
-  const _CallInvitationInitializer({
-    required this.currentUser,
-    required this.child,
-  });
+class _SessionInitializer extends ConsumerStatefulWidget {
+  const _SessionInitializer({required this.currentUser, required this.child});
 
   final User currentUser;
   final Widget child;
 
   @override
-  ConsumerState<_CallInvitationInitializer> createState() =>
-      _CallInvitationInitializerState();
+  ConsumerState<_SessionInitializer> createState() =>
+      _SessionInitializerState();
 }
 
-class _CallInvitationInitializerState
-    extends ConsumerState<_CallInvitationInitializer>
+class _SessionInitializerState extends ConsumerState<_SessionInitializer>
     with WidgetsBindingObserver {
+  late final AuthRepository _authRepository;
   bool? _isOnline;
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _authRepository = ref.read(authRepositoryProvider);
     WidgetsBinding.instance.addObserver(this);
     _initialize();
   }
 
   @override
-  void didUpdateWidget(covariant _CallInvitationInitializer oldWidget) {
+  void didUpdateWidget(covariant _SessionInitializer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentUser.id != widget.currentUser.id) {
       _isOnline = null;
@@ -103,11 +102,11 @@ class _CallInvitationInitializerState
 
   @override
   void dispose() {
+    _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
     unawaited(
       PushNotificationService.clearSession(userId: widget.currentUser.id),
     );
-    CallInvitationService.disposeLater();
     super.dispose();
   }
 
@@ -128,25 +127,24 @@ class _CallInvitationInitializerState
   }
 
   Future<void> _initialize() async {
-    await ref.read(authRepositoryProvider).bindPresence(widget.currentUser.id);
+    await _authRepository.bindPresence(widget.currentUser.id);
+    if (!mounted || _isDisposed) {
+      return;
+    }
+
     await _setPresence(isOnline: true);
+    if (!mounted || _isDisposed) {
+      return;
+    }
+
     await PushNotificationService.syncUserSession(widget.currentUser);
-    await CallInvitationService.ensureInitialized(
-      widget.currentUser,
-      onCallStatusChanged: (statusMessage) async {
-        await ref
-            .read(chatRepositoryProvider)
-            .sendSystemMessage(
-              chatId: statusMessage.chatId,
-              senderId: widget.currentUser.id,
-              text: statusMessage.text,
-              messageId: statusMessage.messageId,
-            );
-      },
-    );
   }
 
   Future<void> _setPresence({required bool isOnline}) async {
+    if (!mounted || _isDisposed) {
+      return;
+    }
+
     if (_isOnline == isOnline) {
       return;
     }
@@ -154,7 +152,7 @@ class _CallInvitationInitializerState
     final previousValue = _isOnline;
     _isOnline = isOnline;
     try {
-      await ref.read(authRepositoryProvider).setPresence(isOnline: isOnline);
+      await _authRepository.setPresence(isOnline: isOnline);
     } catch (_) {
       _isOnline = previousValue;
     }

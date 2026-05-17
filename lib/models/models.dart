@@ -112,6 +112,9 @@ class Message {
   final String id;
   final String chatId;
   final String senderId;
+  final String? senderName;
+  final String? senderUsername;
+  final String? senderAvatar;
   final String content;
   final DateTime timestamp;
   final bool isRead;
@@ -125,6 +128,9 @@ class Message {
     required this.id,
     required this.chatId,
     required this.senderId,
+    this.senderName,
+    this.senderUsername,
+    this.senderAvatar,
     required this.content,
     required this.timestamp,
     this.isRead = false,
@@ -140,6 +146,9 @@ class Message {
       id: id,
       chatId: map['chatId'] as String? ?? '',
       senderId: map['senderId'] as String? ?? '',
+      senderName: map['senderName'] as String?,
+      senderUsername: map['senderUsername'] as String?,
+      senderAvatar: map['senderAvatar'] as String?,
       content: map['content'] as String? ?? '',
       timestamp: _asDateTime(map['timestamp']) ?? DateTime.now(),
       isRead: map['isRead'] as bool? ?? false,
@@ -155,6 +164,9 @@ class Message {
     return {
       'chatId': chatId,
       'senderId': senderId,
+      'senderName': senderName,
+      'senderUsername': senderUsername,
+      'senderAvatar': senderAvatar,
       'content': content,
       'timestamp': Timestamp.fromDate(timestamp),
       'isRead': isRead,
@@ -170,6 +182,9 @@ class Message {
     String? id,
     String? chatId,
     String? senderId,
+    String? senderName,
+    String? senderUsername,
+    String? senderAvatar,
     String? content,
     DateTime? timestamp,
     bool? isRead,
@@ -183,6 +198,9 @@ class Message {
       id: id ?? this.id,
       chatId: chatId ?? this.chatId,
       senderId: senderId ?? this.senderId,
+      senderName: senderName ?? this.senderName,
+      senderUsername: senderUsername ?? this.senderUsername,
+      senderAvatar: senderAvatar ?? this.senderAvatar,
       content: content ?? this.content,
       timestamp: timestamp ?? this.timestamp,
       isRead: isRead ?? this.isRead,
@@ -198,6 +216,12 @@ class Message {
 class Chat {
   final String id;
   final User otherUser;
+  final bool isGroup;
+  // for group chats
+  final String? groupName;
+  final String? groupAvatar;
+  final String? groupCreatedBy;
+
   final Message? lastMessage;
   final int unreadCount;
   final bool isPinned;
@@ -205,10 +229,17 @@ class Chat {
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<String> members;
+  final String? lastMessageSenderName;
+  final String? lastMessageSenderUsername;
+  final String? lastMessageSenderAvatar;
 
   Chat({
     required this.id,
     required this.otherUser,
+    this.isGroup = false,
+    this.groupName,
+    this.groupAvatar,
+    this.groupCreatedBy,
     this.lastMessage,
     this.unreadCount = 0,
     this.isPinned = false,
@@ -216,7 +247,19 @@ class Chat {
     required this.createdAt,
     DateTime? updatedAt,
     this.members = const [],
+    this.lastMessageSenderName,
+    this.lastMessageSenderUsername,
+    this.lastMessageSenderAvatar,
   }) : updatedAt = updatedAt ?? createdAt;
+
+  String get displayName => isGroup
+      ? (groupName?.trim().isNotEmpty == true ? groupName!.trim() : 'Group')
+      : otherUser.name;
+
+  String get displaySubtitle =>
+      isGroup ? '${members.length} members' : otherUser.handle;
+
+  String? get displayAvatar => isGroup ? groupAvatar : otherUser.avatar;
 
   factory Chat.fromMap({
     required String id,
@@ -226,6 +269,7 @@ class Chat {
   }) {
     final createdAt = _asDateTime(map['createdAt']) ?? DateTime.now();
     final updatedAt = _asDateTime(map['updatedAt']) ?? createdAt;
+    final isGroup = (map['type'] as String?) == 'group';
     final lastMessageText = (map['lastMessageText'] as String?)?.trim();
     final unreadCounts = Map<String, dynamic>.from(
       map['unreadCounts'] as Map? ?? const <String, dynamic>{},
@@ -242,6 +286,9 @@ class Chat {
         id: '${id}_last',
         chatId: id,
         senderId: map['lastMessageSenderId'] as String? ?? '',
+        senderName: map['lastMessageSenderName'] as String?,
+        senderUsername: map['lastMessageSenderUsername'] as String?,
+        senderAvatar: map['lastMessageSenderAvatar'] as String?,
         content: lastMessageText,
         timestamp: _asDateTime(map['lastMessageAt']) ?? updatedAt,
         isRead: true,
@@ -252,6 +299,10 @@ class Chat {
     return Chat(
       id: id,
       otherUser: otherUser,
+      isGroup: isGroup,
+      groupName: map['groupName'] as String?,
+      groupAvatar: map['groupAvatar'] as String?,
+      groupCreatedBy: map['createdBy'] as String?,
       lastMessage: lastMessage,
       unreadCount: unreadCount,
       isPinned: map['isPinned'] as bool? ?? false,
@@ -259,12 +310,19 @@ class Chat {
       createdAt: createdAt,
       updatedAt: updatedAt,
       members: List<String>.from(map['members'] as List? ?? const <String>[]),
+      lastMessageSenderName: map['lastMessageSenderName'] as String?,
+      lastMessageSenderUsername: map['lastMessageSenderUsername'] as String?,
+      lastMessageSenderAvatar: map['lastMessageSenderAvatar'] as String?,
     );
   }
 
   Chat copyWith({
     String? id,
     User? otherUser,
+    bool? isGroup,
+    String? groupName,
+    String? groupAvatar,
+    String? groupCreatedBy,
     Message? lastMessage,
     int? unreadCount,
     bool? isPinned,
@@ -272,10 +330,17 @@ class Chat {
     DateTime? createdAt,
     DateTime? updatedAt,
     List<String>? members,
+    String? lastMessageSenderName,
+    String? lastMessageSenderUsername,
+    String? lastMessageSenderAvatar,
   }) {
     return Chat(
       id: id ?? this.id,
       otherUser: otherUser ?? this.otherUser,
+      isGroup: isGroup ?? this.isGroup,
+      groupName: groupName ?? this.groupName,
+      groupAvatar: groupAvatar ?? this.groupAvatar,
+      groupCreatedBy: groupCreatedBy ?? this.groupCreatedBy,
       lastMessage: lastMessage ?? this.lastMessage,
       unreadCount: unreadCount ?? this.unreadCount,
       isPinned: isPinned ?? this.isPinned,
@@ -283,6 +348,12 @@ class Chat {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       members: members ?? this.members,
+      lastMessageSenderName:
+          lastMessageSenderName ?? this.lastMessageSenderName,
+      lastMessageSenderUsername:
+          lastMessageSenderUsername ?? this.lastMessageSenderUsername,
+      lastMessageSenderAvatar:
+          lastMessageSenderAvatar ?? this.lastMessageSenderAvatar,
     );
   }
 }
@@ -328,4 +399,18 @@ MessageType _messageTypeFromString(String? value) {
     (type) => type.name == value,
     orElse: () => MessageType.text,
   );
+}
+
+class ChatGroup {
+  final String id;
+  final String name;
+  final String? avatarUrl;
+  final List<User> members;
+
+  ChatGroup({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+    this.members = const [],
+  });
 }

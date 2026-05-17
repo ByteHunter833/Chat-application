@@ -14,7 +14,6 @@
 - **Chat List** - Pinned conversations, real-time search, swipe actions
 - **Chat Detail** - Full messaging interface with typing indicators
 - **Profile** - User information with quick actions
-- **Call Interface** - Voice/video call UI with timer
 
 ### 🎨 Design & Theme
 
@@ -52,11 +51,10 @@ lib/
 ├── main.dart                      # App entry with theme management
 ├── theme/
 │   └── app_theme.dart            # Material 3 design system
-├── screens/                       # 4 complete screens
+├── screens/                       # 3 complete screens
 │   ├── chat_list_screen.dart     # Browse conversations
 │   ├── chat_detail_screen.dart   # Send/receive messages
-│   ├── profile_screen.dart       # User profile
-│   └── call_screen.dart          # Voice/video interface
+│   └── profile_screen.dart       # User profile
 ├── widgets/                       # 9 reusable UI components
 │   ├── avatar_widget.dart        # User avatars
 │   ├── message_bubble.dart       # Message display
@@ -196,12 +194,11 @@ Ready for:
 
 ## 🎯 What's Included
 
-### Screens (4)
+### Screens (3)
 
 1. **Chat List** - 234 lines
 2. **Chat Detail** - 179 lines
 3. **Profile** - 228 lines
-4. **Call Screen** - 127 lines
 
 ### Widgets (9)
 

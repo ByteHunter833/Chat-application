@@ -156,7 +156,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                           controller: _usernameController,
                           label: 'Username',
                           hint: '@johnc',
-                          prefixText: '@',
+                          prefixText: '',
                           textInputAction: TextInputAction.next,
                           inputFormatters: [
                             FilteringTextInputFormatter.allow(
@@ -289,7 +289,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           obscureText: obscureText,
           validator: validator,
           onFieldSubmitted: onSubmitted,
-          decoration: InputDecoration(hintText: hint, prefixText: prefixText),
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixText: prefixText,
+            hintStyle: TextStyle(color: Colors.grey[500]),
+          ),
         ),
         if (helper != null) ...[
           const SizedBox(height: AppTheme.spacingXs),

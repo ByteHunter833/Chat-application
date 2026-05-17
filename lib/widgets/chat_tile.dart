@@ -27,27 +27,36 @@ class ChatTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final liveUser = ref.watch(userByIdProvider(chat.otherUser.id)).valueOrNull;
-    final presence = ref
-        .watch(userPresenceProvider(chat.otherUser.id))
-        .valueOrNull;
+    final liveUser = chat.isGroup
+        ? null
+        : ref.watch(userByIdProvider(chat.otherUser.id)).valueOrNull;
+    final presence = chat.isGroup
+        ? null
+        : ref.watch(userPresenceProvider(chat.otherUser.id)).valueOrNull;
     final otherUser = (liveUser ?? chat.otherUser).applyPresence(presence);
-    final isTyping =
-        ref
-            .watch(
-              chatTypingProvider((
-                chatId: chat.id,
-                otherUserId: chat.otherUser.id,
-              )),
-            )
-            .valueOrNull ??
-        false;
+    final currentUserId = ref.watch(currentUserIdProvider);
+    final isTyping = chat.isGroup
+        ? false
+        : ref
+                  .watch(
+                    chatTypingProvider((
+                      chatId: chat.id,
+                      otherUserId: chat.otherUser.id,
+                    )),
+                  )
+                  .valueOrNull ??
+              false;
     final canSwipeActions = onDelete != null || onMute != null;
-    final previewText = isTyping
-        ? 'typing...'
-        : Formatters.formatMessagePreview(
-            chat.lastMessage?.content ?? otherUser.handle,
-          );
+    final previewText = _previewText(
+      isTyping: isTyping,
+      currentUserId: currentUserId,
+    );
+    final displayName = chat.isGroup ? chat.displayName : otherUser.name;
+    final displayAvatar = chat.isGroup ? chat.groupAvatar : otherUser.avatar;
+    final showLastSenderAvatar = _showLastSenderAvatar(currentUserId);
+    final lastSenderName = _lastSenderDisplayName();
+    final lastSenderAvatar =
+        chat.lastMessageSenderAvatar ?? chat.lastMessage?.senderAvatar;
 
     final tileContent = GestureDetector(
       onTap: onTap,
@@ -66,10 +75,10 @@ class ChatTile extends ConsumerWidget {
             Stack(
               children: [
                 AvatarWidget(
-                  imageUrl: otherUser.avatar,
-                  initials: _getInitials(otherUser.name),
+                  imageUrl: displayAvatar,
+                  initials: _getInitials(displayName),
                   size: 56,
-                  isOnline: otherUser.isOnline,
+                  isOnline: !chat.isGroup && otherUser.isOnline,
                 ),
                 if (chat.isPinned)
                   Positioned(
@@ -101,7 +110,7 @@ class ChatTile extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          otherUser.name,
+                          displayName,
                           style: Theme.of(context).textTheme.titleMedium,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -118,6 +127,14 @@ class ChatTile extends ConsumerWidget {
                   const SizedBox(height: AppTheme.spacingXs),
                   Row(
                     children: [
+                      if (showLastSenderAvatar) ...[
+                        AvatarWidget(
+                          imageUrl: lastSenderAvatar,
+                          initials: _getInitials(lastSenderName),
+                          size: 18,
+                        ),
+                        const SizedBox(width: AppTheme.spacingXs),
+                      ],
                       Expanded(
                         child: Text(
                           previewText,
@@ -204,11 +221,75 @@ class ChatTile extends ConsumerWidget {
     );
   }
 
+  String _previewText({
+    required bool isTyping,
+    required String? currentUserId,
+  }) {
+    if (isTyping) {
+      return 'typing...';
+    }
+
+    final lastMessage = chat.lastMessage;
+    if (!chat.isGroup || lastMessage == null) {
+      return Formatters.formatMessagePreview(
+        lastMessage?.content ?? chat.displaySubtitle,
+      );
+    }
+
+    if (lastMessage.type == MessageType.system) {
+      return Formatters.formatMessagePreview(lastMessage.content);
+    }
+
+    final senderPrefix = lastMessage.senderId == currentUserId
+        ? 'You'
+        : _lastSenderDisplayName();
+    return Formatters.formatMessagePreview(
+      '$senderPrefix: ${lastMessage.content}',
+      maxLength: 62,
+    );
+  }
+
+  bool _showLastSenderAvatar(String? currentUserId) {
+    final lastMessage = chat.lastMessage;
+    return chat.isGroup &&
+        lastMessage != null &&
+        lastMessage.type != MessageType.system &&
+        lastMessage.senderId != currentUserId;
+  }
+
+  String _lastSenderDisplayName() {
+    final senderName = chat.lastMessageSenderName?.trim();
+    if (senderName != null && senderName.isNotEmpty) {
+      return senderName;
+    }
+
+    final messageSenderName = chat.lastMessage?.senderName?.trim();
+    if (messageSenderName != null && messageSenderName.isNotEmpty) {
+      return messageSenderName;
+    }
+
+    final senderUsername = chat.lastMessageSenderUsername?.trim();
+    if (senderUsername != null && senderUsername.isNotEmpty) {
+      return '@$senderUsername';
+    }
+
+    final messageSenderUsername = chat.lastMessage?.senderUsername?.trim();
+    if (messageSenderUsername != null && messageSenderUsername.isNotEmpty) {
+      return '@$messageSenderUsername';
+    }
+
+    return 'Member';
+  }
+
   String _getInitials(String name) {
-    final parts = name.split(' ');
+    final normalizedName = name.trim().replaceFirst(RegExp(r'^@+'), '');
+    final parts = normalizedName.split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) {
+      return '?';
+    }
     if (parts.length >= 2) {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
-    return name.substring(0, 1).toUpperCase();
+    return parts.first.substring(0, 1).toUpperCase();
   }
 }

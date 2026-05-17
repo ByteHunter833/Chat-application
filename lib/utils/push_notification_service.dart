@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import '../firebase_options.dart';
 import '../models/models.dart';
 import '../repositories/chat_repository.dart';
-import '../screens/call_screen.dart';
 import '../screens/chat_detail_screen.dart';
 import 'app_navigator.dart';
 
@@ -82,29 +81,6 @@ class PushNotificationService {
     _tokenRefreshSubscription = null;
   }
 
-  static Future<void> createCallInvitation({
-    required String callerId,
-    required String callerName,
-    required String calleeId,
-    required String chatId,
-    required String callId,
-    required bool isVideoCall,
-  }) async {
-    await FirebaseFirestore.instance
-        .collection('callInvitations')
-        .doc(callId)
-        .set({
-          'callerId': callerId,
-          'callerName': callerName,
-          'calleeId': calleeId,
-          'chatId': chatId,
-          'callId': callId,
-          'isVideoCall': isVideoCall,
-          'status': 'pending',
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-  }
-
   static Future<void> _saveToken(String userId, String token) async {
     await FirebaseFirestore.instance.collection('users').doc(userId).set({
       'notificationTokens': FieldValue.arrayUnion([token]),
@@ -132,14 +108,6 @@ class PushNotificationService {
         }
         await _openChat(chatId);
         break;
-      case 'call_invitation':
-        final callId = data['callId'] as String?;
-        if (callId == null || callId.isEmpty) {
-          return;
-        }
-        final isVideoCall = data['isVideoCall'] == 'true';
-        _openCall(callId: callId, isVideoCall: isVideoCall);
-        break;
     }
   }
 
@@ -165,19 +133,6 @@ class PushNotificationService {
 
     navigator.push(
       MaterialPageRoute(builder: (_) => ChatDetailScreen(chat: chat)),
-    );
-  }
-
-  static void _openCall({required String callId, required bool isVideoCall}) {
-    final navigator = appNavigatorKey.currentState;
-    if (navigator == null) {
-      return;
-    }
-
-    navigator.push(
-      MaterialPageRoute(
-        builder: (_) => CallPage(callID: callId, isVideoCall: isVideoCall),
-      ),
     );
   }
 }

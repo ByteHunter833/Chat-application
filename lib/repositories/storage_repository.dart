@@ -65,6 +65,46 @@ class StorageRepository {
     );
   }
 
+  Future<String> uploadGroupAvatar({
+    required PlatformFile file,
+    required String ownerId,
+  }) async {
+    if (_client == null) {
+      throw const StorageNotConfiguredException();
+    }
+
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      throw const StorageUploadException(
+        'Selected image is empty or unavailable.',
+      );
+    }
+
+    if (bytes.length > maxUploadBytes) {
+      throw const StorageUploadException(
+        'Image is too large. Please keep group photos under 20 MB.',
+      );
+    }
+
+    final sanitizedName = _sanitizeFileName(file.name);
+    final mimeType = _detectMimeType(file.name);
+    if (!mimeType.startsWith('image/')) {
+      throw const StorageUploadException('Please choose an image file.');
+    }
+
+    final storagePath =
+        'group-avatars/$ownerId/${DateTime.now().millisecondsSinceEpoch}_$sanitizedName';
+    await _client.storage
+        .from(bucketName)
+        .uploadBinary(
+          storagePath,
+          bytes,
+          fileOptions: FileOptions(contentType: mimeType, upsert: false),
+        );
+
+    return _client.storage.from(bucketName).getPublicUrl(storagePath);
+  }
+
   String _sanitizeFileName(String input) {
     final trimmed = input.trim();
     final sanitized = trimmed.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');

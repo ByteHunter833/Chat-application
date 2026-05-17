@@ -4,17 +4,20 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
+import 'avatar_widget.dart';
 
 class MessageBubble extends StatelessWidget {
   final Message message;
   final bool isOwn;
   final bool showTimestamp;
+  final bool showSenderInfo;
 
   const MessageBubble({
     super.key,
     required this.message,
     required this.isOwn,
     this.showTimestamp = true,
+    this.showSenderInfo = false,
   });
 
   @override
@@ -69,6 +72,98 @@ class MessageBubble extends StatelessWidget {
               ? AppTheme.receivedBubbleTextDark
               : AppTheme.receivedBubbleText);
 
+    final shouldShowSender = showSenderInfo && !isOwn;
+    final senderName = _senderDisplayName(message);
+    final bubbleColumn = Column(
+      crossAxisAlignment: isOwn
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        if (shouldShowSender)
+          Padding(
+            padding: const EdgeInsets.only(
+              left: AppTheme.spacingSm,
+              bottom: AppTheme.spacingXs,
+            ),
+            child: Text(
+              senderName,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        Container(
+          decoration: BoxDecoration(
+            color: bubbleBg,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(AppTheme.radiusLg),
+              topRight: const Radius.circular(AppTheme.radiusLg),
+              bottomLeft: Radius.circular(
+                isOwn ? AppTheme.radiusLg : AppTheme.radiusSm,
+              ),
+              bottomRight: Radius.circular(
+                isOwn ? AppTheme.radiusSm : AppTheme.radiusLg,
+              ),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTheme.spacingMd,
+            vertical: AppTheme.spacingSm,
+          ),
+          child: _MessageBubbleContent(
+            message: message,
+            bubbleText: bubbleText,
+          ),
+        ),
+        if (showTimestamp)
+          Padding(
+            padding: const EdgeInsets.only(top: AppTheme.spacingXs),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  Formatters.formatMessageTime(message.timestamp),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (isOwn && message.isRead)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Icon(
+                      Icons.done_all,
+                      size: 14,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+
+    if (shouldShowSender) {
+      return Padding(
+        padding: const EdgeInsets.only(
+          left: AppTheme.spacingLg,
+          right: 60,
+          top: AppTheme.spacingSm,
+          bottom: AppTheme.spacingSm,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            AvatarWidget(
+              imageUrl: message.senderAvatar,
+              initials: _getInitials(senderName),
+              size: 32,
+            ),
+            const SizedBox(width: AppTheme.spacingSm),
+            Flexible(child: bubbleColumn),
+          ],
+        ),
+      );
+    }
+
     return Align(
       alignment: isOwn ? Alignment.centerRight : Alignment.centerLeft,
       child: Padding(
@@ -78,60 +173,35 @@ class MessageBubble extends StatelessWidget {
           top: AppTheme.spacingSm,
           bottom: AppTheme.spacingSm,
         ),
-        child: Column(
-          crossAxisAlignment: isOwn
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: bubbleBg,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(AppTheme.radiusLg),
-                  topRight: const Radius.circular(AppTheme.radiusLg),
-                  bottomLeft: Radius.circular(
-                    isOwn ? AppTheme.radiusLg : AppTheme.radiusSm,
-                  ),
-                  bottomRight: Radius.circular(
-                    isOwn ? AppTheme.radiusSm : AppTheme.radiusLg,
-                  ),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.spacingMd,
-                vertical: AppTheme.spacingSm,
-              ),
-              child: _MessageBubbleContent(
-                message: message,
-                bubbleText: bubbleText,
-              ),
-            ),
-            if (showTimestamp)
-              Padding(
-                padding: const EdgeInsets.only(top: AppTheme.spacingXs),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      Formatters.formatMessageTime(message.timestamp),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (isOwn && message.isRead)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4),
-                        child: Icon(
-                          Icons.done_all,
-                          size: 14,
-                          color: AppTheme.primary,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-          ],
-        ),
+        child: bubbleColumn,
       ),
     );
+  }
+
+  String _senderDisplayName(Message message) {
+    final name = message.senderName?.trim();
+    if (name != null && name.isNotEmpty) {
+      return name;
+    }
+
+    final username = message.senderUsername?.trim();
+    if (username != null && username.isNotEmpty) {
+      return '@$username';
+    }
+
+    return 'Member';
+  }
+
+  String _getInitials(String name) {
+    final normalizedName = name.trim().replaceFirst(RegExp(r'^@+'), '');
+    final parts = normalizedName.split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) {
+      return '?';
+    }
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return parts.first.substring(0, 1).toUpperCase();
   }
 }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,7 +16,6 @@ class StartChatSheet extends ConsumerStatefulWidget {
 
 class _StartChatSheetState extends ConsumerState<StartChatSheet> {
   final TextEditingController _searchController = TextEditingController();
-  bool _isCreatingChat = false;
 
   String get _query => _searchController.text.trim().replaceFirst('@', '');
 
@@ -37,44 +37,8 @@ class _StartChatSheetState extends ConsumerState<StartChatSheet> {
     setState(() {});
   }
 
-  Future<void> _openChat(User targetUser) async {
-    final currentUser = ref.read(currentAppUserProvider).valueOrNull;
-    if (currentUser == null) {
-      return;
-    }
-
-    setState(() {
-      _isCreatingChat = true;
-    });
-
-    try {
-      final chat = await ref
-          .read(chatRepositoryProvider)
-          .createOrGetDirectChat(
-            currentUser: currentUser,
-            otherUser: targetUser,
-          );
-
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.of(context).pop(chat);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Unable to start chat: $error')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isCreatingChat = false;
-        });
-      }
-    }
+  void _openChat(User targetUser) {
+    Navigator.of(context).pop(targetUser);
   }
 
   @override
@@ -119,7 +83,6 @@ class _StartChatSheetState extends ConsumerState<StartChatSheet> {
             const SizedBox(height: AppTheme.spacingLg),
             TextField(
               controller: _searchController,
-              enabled: !_isCreatingChat,
               autofocus: true,
               decoration: const InputDecoration(
                 prefixText: '@',
@@ -163,12 +126,10 @@ class _StartChatSheetState extends ConsumerState<StartChatSheet> {
           );
         }
 
-        return ListView.separated(
+        return ListView.builder(
           key: const ValueKey('results'),
-          shrinkWrap: true,
           itemCount: users.length,
-          separatorBuilder: (_, _) =>
-              const SizedBox(height: AppTheme.spacingSm),
+
           itemBuilder: (context, index) {
             final user = users[index];
 
@@ -183,14 +144,14 @@ class _StartChatSheetState extends ConsumerState<StartChatSheet> {
                 ),
                 title: Text(user.name),
                 subtitle: Text(user.handle),
-                trailing: _isCreatingChat
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.chevron_right_rounded),
-                onTap: _isCreatingChat ? null : () => _openChat(user),
+                trailing: IconButton(
+                  icon: const Icon(
+                    CupertinoIcons.chat_bubble_fill,
+                    color: AppTheme.primary,
+                  ),
+                  onPressed: () => _openChat(user),
+                ),
+                onTap: () => _openChat(user),
               ),
             );
           },
@@ -229,23 +190,21 @@ class _InfoBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: AppTheme.primary, size: 32),
-            const SizedBox(height: AppTheme.spacingMd),
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: AppTheme.spacingSm),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppTheme.primary, size: 32),
+          const SizedBox(height: AppTheme.spacingMd),
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppTheme.spacingSm),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
       ),
     );
   }
