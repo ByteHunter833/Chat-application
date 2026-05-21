@@ -12,10 +12,11 @@ import '../repositories/auth_repository.dart';
 import '../repositories/chat_repository.dart';
 import '../repositories/storage_repository.dart';
 
+// Auth provider
 final firebaseAuthProvider = Provider<auth.FirebaseAuth>((ref) {
   return auth.FirebaseAuth.instance;
 });
-
+// FireStore and Realtime Database providers
 final firestoreProvider = Provider<FirebaseFirestore>((ref) {
   return FirebaseFirestore.instance;
 });

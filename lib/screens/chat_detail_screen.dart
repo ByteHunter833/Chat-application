@@ -386,6 +386,81 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     return parts.first.substring(0, 1).toUpperCase();
   }
 
+  void showUndoSnackbar(String message, VoidCallback onUndo) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(message),
+
+        action: SnackBarAction(label: 'Undo', onPressed: onUndo),
+      ),
+    );
+  }
+
+  void _showClearChatAndDeleteChatDialog(String username, String actionType) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            actionType == 'clear' ? 'Clear history?' : 'Delete chat?',
+          ),
+          content: RichText(
+            text: TextSpan(
+              text:
+                  'Are you sure you want to ${actionType == 'clear' ? 'clear' : 'delete'} the chat with ',
+              style: Theme.of(context).textTheme.bodyMedium,
+              children: [
+                TextSpan(
+                  text: username,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (actionType == 'delete') {
+                  unawaited(_chatRepository.deleteChat(_chat.id));
+                  Navigator.pop(context);
+                } else {
+                  unawaited(_chatRepository.clearChatHistory(_chat.id));
+                }
+                Navigator.pop(context);
+              },
+              child: Text(actionType == 'clear' ? 'Clear' : 'Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> clearChatHistory() async {
+    final currentUserId = ref.read(currentUserIdProvider);
+    if (currentUserId == null) {
+      return;
+    }
+
+    try {
+      await _chatRepository.clearChatHistory(_chat.id);
+    } catch (error) {
+      if (!mounted || _isDisposed) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to clear history: $error')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -491,12 +566,24 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           ),
         ),
         actions: [
-          IconButton(
-            onPressed: () {},
-            icon: Icon(
-              Icons.more_vert,
-              color: Theme.of(context).iconTheme.color,
-            ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'clear_chat_history') {
+                _showClearChatAndDeleteChatDialog(otherUser.name, 'clear');
+              } else if (value == 'delete_chat') {
+                _showClearChatAndDeleteChatDialog(otherUser.name, 'delete');
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<String>(
+                value: 'clear_chat_history',
+                child: Text('Clear chat history'),
+              ),
+              PopupMenuItem<String>(
+                value: 'delete_chat',
+                child: Text('Delete chat'),
+              ),
+            ],
           ),
         ],
       ),

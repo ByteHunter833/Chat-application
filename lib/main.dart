@@ -36,8 +36,8 @@ class ChatApp extends ConsumerWidget {
       title: 'Chat',
       debugShowCheckedModeBanner: false,
       navigatorKey: appNavigatorKey,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      theme: AppTheme.darkTheme,
+      darkTheme: AppTheme.lightTheme,
       themeMode: themeMode,
       home: const AppRoot(),
     );

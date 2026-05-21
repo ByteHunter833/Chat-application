@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -28,15 +25,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -54,6 +45,7 @@ class DefaultFirebaseOptions {
     appId: '1:981184895290:android:6a47ad84591d5c0e789803',
     messagingSenderId: '981184895290',
     projectId: 'minimal-login-ui-884cd',
+    databaseURL: 'https://minimal-login-ui-884cd-default-rtdb.firebaseio.com',
     storageBucket: 'minimal-login-ui-884cd.firebasestorage.app',
   );
 
@@ -62,7 +54,39 @@ class DefaultFirebaseOptions {
     appId: '1:981184895290:ios:355e13fb6f6f1948789803',
     messagingSenderId: '981184895290',
     projectId: 'minimal-login-ui-884cd',
+    databaseURL: 'https://minimal-login-ui-884cd-default-rtdb.firebaseio.com',
     storageBucket: 'minimal-login-ui-884cd.firebasestorage.app',
     iosBundleId: 'com.example.chatApp',
   );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyD43--9-bSi0blJAWvN5lL6kYD6EZOrgrs',
+    appId: '1:981184895290:web:ea94abf3a6f41470789803',
+    messagingSenderId: '981184895290',
+    projectId: 'minimal-login-ui-884cd',
+    authDomain: 'minimal-login-ui-884cd.firebaseapp.com',
+    databaseURL: 'https://minimal-login-ui-884cd-default-rtdb.firebaseio.com',
+    storageBucket: 'minimal-login-ui-884cd.firebasestorage.app',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyAwoxFjSISsxUEyH5xVV-0Gv2OkNizmWuY',
+    appId: '1:981184895290:ios:355e13fb6f6f1948789803',
+    messagingSenderId: '981184895290',
+    projectId: 'minimal-login-ui-884cd',
+    databaseURL: 'https://minimal-login-ui-884cd-default-rtdb.firebaseio.com',
+    storageBucket: 'minimal-login-ui-884cd.firebasestorage.app',
+    iosBundleId: 'com.example.chatApp',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyD43--9-bSi0blJAWvN5lL6kYD6EZOrgrs',
+    appId: '1:981184895290:web:ed76e4e293405310789803',
+    messagingSenderId: '981184895290',
+    projectId: 'minimal-login-ui-884cd',
+    authDomain: 'minimal-login-ui-884cd.firebaseapp.com',
+    databaseURL: 'https://minimal-login-ui-884cd-default-rtdb.firebaseio.com',
+    storageBucket: 'minimal-login-ui-884cd.firebasestorage.app',
+  );
+
 }

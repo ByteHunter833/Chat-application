@@ -1,9 +1,8 @@
-import * as admin from 'firebase-admin'
+import { initializeApp } from 'firebase-admin/app'
+import { getFirestore } from 'firebase-admin/firestore'
+import { getMessaging, type MulticastMessage } from 'firebase-admin/messaging'
 import { logger } from 'firebase-functions'
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
-
-const { initializeApp, getFirestore, getMessaging } = admin
-type MulticastMessage = admin.messaging.MulticastMessage
 
 initializeApp()
 
@@ -37,6 +36,7 @@ export const onChatMessageCreated = onDocumentCreated(
 
 		const chatSnapshot = await firestore.doc(`chats/${chatId}`).get()
 		const chatData = chatSnapshot.data()
+		const chatType = chatData?.type === 'group' ? 'group' : 'direct'
 		const members = Array.isArray(chatData?.members)
 			? (chatData?.members as string[])
 			: []
@@ -64,10 +64,17 @@ export const onChatMessageCreated = onDocumentCreated(
 					data: {
 						type: 'chat_message',
 						chatId,
+						chatType,
 						senderId: message.senderId ?? '',
+						title: senderName,
+						body,
 					},
 					android: {
 						priority: 'high',
+						notification: {
+							channelId:
+								chatType === 'group' ? 'group_messages' : 'direct_messages',
+						},
 					},
 					apns: {
 						headers: {

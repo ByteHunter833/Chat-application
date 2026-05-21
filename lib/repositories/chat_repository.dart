@@ -59,10 +59,7 @@ class ChatRepository {
         }),
       );
 
-      yield chats
-          .whereType<Chat>()
-          .where((chat) => chat.lastMessage != null)
-          .toList();
+      yield chats.whereType<Chat>().toList();
     }
   }
 
@@ -578,6 +575,37 @@ class ChatRepository {
         .ref('typing/$chatId/$otherUserId')
         .onValue
         .map((event) => event.snapshot.value == true);
+  }
+
+  Future<void> clearChatHistory(String chatId) {
+    final chatRef = _firestore.collection('chats').doc(chatId);
+    return _firestore.runTransaction((transaction) async {
+      final messagesSnapshot = await chatRef.collection('messages').get();
+      for (final doc in messagesSnapshot.docs) {
+        transaction.delete(doc.reference);
+      }
+
+      transaction.update(chatRef, {
+        'lastMessageAt': null,
+        'lastMessageText': '',
+        'lastMessageSenderId': '',
+        'lastMessageSenderName': '',
+        'lastMessageSenderUsername': '',
+        'lastMessageSenderAvatar': null,
+        'lastMessageType': null,
+      });
+    });
+  }
+
+  Future<void> deleteChat(String chatId) async {
+    final chatRef = _firestore.collection('chats').doc(chatId);
+    await _firestore.runTransaction((transaction) async {
+      final messagesSnapshot = await chatRef.collection('messages').get();
+      for (final doc in messagesSnapshot.docs) {
+        transaction.delete(doc.reference);
+      }
+      transaction.delete(chatRef);
+    });
   }
 }
 

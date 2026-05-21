@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:chat_app/utils/local_notification_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:firebase_core/firebase_core.dart';
@@ -37,7 +38,14 @@ class PushNotificationService {
       badge: true,
       sound: true,
     );
-
+    await LocalNotificationService().initLocalNotifications(
+      onNotificationTap: (payload) {
+        unawaited(_handleLocalNotificationPayload(payload));
+      },
+    );
+    FirebaseMessaging.onMessage.listen((message) {
+      unawaited(handleForegroundMessage(message));
+    });
     FirebaseMessaging.onMessageOpenedApp.listen(_handleOpenedMessage);
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
@@ -111,6 +119,14 @@ class PushNotificationService {
     }
   }
 
+  static Future<void> _handleLocalNotificationPayload(String? payload) async {
+    if (payload == null || payload.isEmpty) {
+      return;
+    }
+
+    await _openChat(payload);
+  }
+
   static Future<void> _openChat(String chatId) async {
     final currentUserId = auth.FirebaseAuth.instance.currentUser?.uid;
     if (currentUserId == null) {
@@ -133,6 +149,31 @@ class PushNotificationService {
 
     navigator.push(
       MaterialPageRoute(builder: (_) => ChatDetailScreen(chat: chat)),
+    );
+  }
+
+  static Future<void> handleForegroundMessage(RemoteMessage message) async {
+    final data = message.data;
+
+    final chatId = data['chatId'] as String?;
+    if (chatId == null || chatId.isEmpty) {
+      return;
+    }
+
+    // Later: check if current opened chat == chatId
+    // if yes, don't show notification
+    final notification = message.notification;
+    final title = (notification?.title ?? data['title'] as String?)?.trim();
+    final body = (notification?.body ?? data['body'] as String?)?.trim();
+    final channelId = data['chatType'] == 'group'
+        ? LocalNotificationService.groupChannel.id
+        : LocalNotificationService.directChannel.id;
+
+    await LocalNotificationService().showNotification(
+      channelId: channelId,
+      title: title?.isNotEmpty == true ? title! : 'New message',
+      body: body?.isNotEmpty == true ? body! : 'Open chat',
+      payload: chatId,
     );
   }
 }

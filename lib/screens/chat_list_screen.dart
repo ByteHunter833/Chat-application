@@ -123,7 +123,6 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     final themeMode = ref.watch(themeModeProvider);
     final currentUser = ref.watch(currentAppUserProvider).valueOrNull;
     final chatsAsync = ref.watch(chatsProvider);
-
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
       appBar: _buildAppBar(context, currentUser, themeMode),
