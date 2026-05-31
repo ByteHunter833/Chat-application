@@ -90,7 +90,7 @@ class _CreateGroupProcessScreenState
       return;
     }
 
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFiles(
       allowMultiple: false,
       withData: true,
       type: FileType.image,
@@ -107,7 +107,7 @@ class _CreateGroupProcessScreenState
 
   Future<void> _createGroup() async {
     final groupName = _nameController.text.trim();
-    final currentUser = ref.read(currentAppUserProvider).valueOrNull;
+    final currentUser = ref.read(currentAppUserProvider).value;
     if (currentUser == null ||
         groupName.isEmpty ||
         _selectedUsers.isEmpty ||

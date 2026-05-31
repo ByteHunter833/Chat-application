@@ -1,7 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
+import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 import 'avatar_widget.dart';
@@ -11,13 +14,16 @@ class MessageBubble extends StatelessWidget {
   final bool isOwn;
   final bool showTimestamp;
   final bool showSenderInfo;
-
+  final VoidCallback? onReplyTap;
+  final VoidCallback? onDeleteMedia;
   const MessageBubble({
     super.key,
     required this.message,
     required this.isOwn,
     this.showTimestamp = true,
     this.showSenderInfo = false,
+    this.onReplyTap,
+    this.onDeleteMedia,
   });
 
   @override
@@ -114,6 +120,9 @@ class MessageBubble extends StatelessWidget {
           child: _MessageBubbleContent(
             message: message,
             bubbleText: bubbleText,
+            isOwn: isOwn,
+            onReplyTap: onReplyTap,
+            onDeleteMedia: onDeleteMedia,
           ),
         ),
         if (showTimestamp)
@@ -209,53 +218,178 @@ class _MessageBubbleContent extends StatelessWidget {
   const _MessageBubbleContent({
     required this.message,
     required this.bubbleText,
+    required this.isOwn,
+    this.onReplyTap,
+    this.onDeleteMedia,
   });
 
   final Message message;
   final Color bubbleText;
+  final bool isOwn;
+  final VoidCallback? onReplyTap;
+  final VoidCallback? onDeleteMedia;
 
   @override
   Widget build(BuildContext context) {
-    switch (message.type) {
-      case MessageType.image:
-        return _AttachmentPreview(
-          message: message,
-          bubbleText: bubbleText,
-          icon: Icons.photo_outlined,
-          showImage: true,
-        );
-      case MessageType.video:
-        return _AttachmentPreview(
-          message: message,
-          bubbleText: bubbleText,
-          icon: Icons.videocam_outlined,
-        );
-      case MessageType.file:
-      case MessageType.voice:
-        return _AttachmentPreview(
-          message: message,
-          bubbleText: bubbleText,
-          icon: message.type == MessageType.voice
-              ? Icons.mic_outlined
-              : Icons.attach_file_outlined,
-        );
-      case MessageType.system:
-        return const SizedBox.shrink();
-      case MessageType.text:
-        return Text(
-          message.content,
-          style: TextStyle(
-            color: bubbleText,
-            fontSize: 15,
-            fontWeight: FontWeight.w400,
-            height: 1.4,
-          ),
-        );
+    final content = switch (message.type) {
+      MessageType.image => _AttachmentPreview(
+        message: message,
+        bubbleText: bubbleText,
+        icon: Icons.photo_outlined,
+        showImage: true,
+      ),
+      MessageType.video => _AttachmentPreview(
+        message: message,
+        bubbleText: bubbleText,
+        icon: Icons.videocam_outlined,
+      ),
+      MessageType.file || MessageType.voice => _AttachmentPreview(
+        message: message,
+        bubbleText: bubbleText,
+        icon: message.type == MessageType.voice
+            ? Icons.mic_outlined
+            : Icons.attach_file_outlined,
+      ),
+      MessageType.system => const SizedBox.shrink(),
+      MessageType.text => Text(
+        message.content,
+        style: TextStyle(
+          color: bubbleText,
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          height: 1.4,
+        ),
+      ),
+    };
+
+    final reply = message.replyTo;
+    if (reply == null) {
+      return content;
     }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ReplyQuote(
+          reply: reply,
+          isOwn: isOwn,
+          textColor: bubbleText,
+          onTap: onReplyTap,
+        ),
+        const SizedBox(height: AppTheme.spacingSm),
+        content,
+      ],
+    );
   }
 }
 
-class _AttachmentPreview extends StatelessWidget {
+class _ReplyQuote extends StatelessWidget {
+  const _ReplyQuote({
+    required this.reply,
+    required this.isOwn,
+    required this.textColor,
+    this.onTap,
+  });
+
+  final MessageReply reply;
+  final bool isOwn;
+  final Color textColor;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = isOwn
+        ? Colors.white.withValues(alpha: 0.16)
+        : AppTheme.primary.withValues(alpha: 0.08);
+    final titleColor = isOwn ? Colors.white : AppTheme.primary;
+    final previewColor = isOwn
+        ? Colors.white.withValues(alpha: 0.88)
+        : textColor.withValues(alpha: 0.78);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 160, maxWidth: 260),
+        padding: const EdgeInsets.all(AppTheme.spacingSm),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 3,
+              height: 36,
+              decoration: BoxDecoration(
+                color: titleColor,
+                borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+              ),
+            ),
+            const SizedBox(width: AppTheme.spacingSm),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    reply.senderDisplayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: titleColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (reply.type != MessageType.text) ...[
+                        Icon(
+                          _replyIcon(reply.type),
+                          size: 14,
+                          color: previewColor,
+                        ),
+                        const SizedBox(width: AppTheme.spacingXs),
+                      ],
+                      Flexible(
+                        child: Text(
+                          reply.previewText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: previewColor,
+                            fontSize: 13,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _replyIcon(MessageType type) {
+    return switch (type) {
+      MessageType.image => Icons.photo_outlined,
+      MessageType.video => Icons.videocam_outlined,
+      MessageType.voice => Icons.mic_outlined,
+      MessageType.file => Icons.attach_file_outlined,
+      MessageType.system => Icons.info_outline,
+      MessageType.text => Icons.notes_outlined,
+    };
+  }
+}
+
+class _AttachmentPreview extends ConsumerStatefulWidget {
   const _AttachmentPreview({
     required this.message,
     required this.bubbleText,
@@ -269,59 +403,122 @@ class _AttachmentPreview extends StatelessWidget {
   final bool showImage;
 
   @override
-  Widget build(BuildContext context) {
-    final hasUrl = message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
+  ConsumerState<_AttachmentPreview> createState() => _AttachmentPreviewState();
+}
 
-    return InkWell(
-      onTap: hasUrl ? () => _openAttachment(message.mediaUrl!) : null,
-      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (showImage && hasUrl)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              child: Image.network(
-                message.mediaUrl!,
-                width: 220,
-                height: 220,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return _AttachmentFallback(
-                    icon: icon,
-                    title: message.fileName ?? message.content,
-                    subtitle: 'Unable to load image',
-                    color: bubbleText,
-                  );
-                },
-              ),
-            )
-          else
-            _AttachmentFallback(
-              icon: icon,
-              title: message.fileName ?? message.content,
-              subtitle: [
-                if (message.mimeType?.isNotEmpty == true) message.mimeType!,
-                if ((message.fileSize ?? 0) > 0)
-                  Formatters.formatAttachmentSize(message.fileSize),
-              ].join(' • '),
-              color: bubbleText,
-            ),
-          if (!_isAutoGeneratedLabel(message))
-            Padding(
-              padding: const EdgeInsets.only(top: AppTheme.spacingSm),
-              child: Text(
-                message.content,
-                style: TextStyle(
-                  color: bubbleText,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  height: 1.4,
+class _AttachmentPreviewState extends ConsumerState<_AttachmentPreview> {
+  late Future<String?> _mediaUrlFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _mediaUrlFuture = _resolveMediaUrl();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AttachmentPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.mediaUrl == widget.message.mediaUrl &&
+        oldWidget.message.mediaStoragePath == widget.message.mediaStoragePath) {
+      return;
+    }
+
+    _mediaUrlFuture = _resolveMediaUrl();
+  }
+
+  Future<String?> _resolveMediaUrl() async {
+    final mediaUrl = widget.message.mediaUrl?.trim();
+    final mediaStoragePath = widget.message.mediaStoragePath?.trim();
+    if ((mediaUrl == null || mediaUrl.isEmpty) &&
+        (mediaStoragePath == null || mediaStoragePath.isEmpty)) {
+      return null;
+    }
+
+    try {
+      return await ref
+          .read(storageRepositoryProvider)
+          .resolveMediaUrl(url: mediaUrl, storagePath: mediaStoragePath);
+    } catch (_) {
+      return mediaUrl;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: _mediaUrlFuture,
+      builder: (context, snapshot) {
+        final resolvedUrl = snapshot.data?.trim();
+        final hasUrl = resolvedUrl != null && resolvedUrl.isNotEmpty;
+        final cacheKey =
+            widget.message.mediaStoragePath ??
+            widget.message.mediaUrl ??
+            resolvedUrl;
+        final isResolvingUrl =
+            snapshot.connectionState != ConnectionState.done &&
+            ((widget.message.mediaUrl?.trim().isNotEmpty ?? false) ||
+                (widget.message.mediaStoragePath?.trim().isNotEmpty ?? false));
+
+        return InkWell(
+          onTap: hasUrl ? () => _openAttachment(resolvedUrl) : null,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.showImage && hasUrl)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  child: CachedNetworkImage(
+                    imageUrl: resolvedUrl,
+                    cacheKey: cacheKey,
+                    key: ValueKey(cacheKey),
+                    width: 220,
+                    height: 220,
+                    fit: BoxFit.cover,
+                    errorWidget: (context, url, error) {
+                      return _AttachmentFallback(
+                        icon: widget.icon,
+                        title:
+                            widget.message.fileName ?? widget.message.content,
+                        subtitle: 'Unable to load image',
+                        color: widget.bubbleText,
+                      );
+                    },
+                  ),
+                )
+              else
+                _AttachmentFallback(
+                  icon: widget.icon,
+                  title: widget.message.fileName ?? widget.message.content,
+                  subtitle: isResolvingUrl
+                      ? 'Loading attachment...'
+                      : [
+                          if (widget.message.mimeType?.isNotEmpty == true)
+                            widget.message.mimeType!,
+                          if ((widget.message.fileSize ?? 0) > 0)
+                            Formatters.formatAttachmentSize(
+                              widget.message.fileSize,
+                            ),
+                        ].join(' • '),
+                  color: widget.bubbleText,
                 ),
-              ),
-            ),
-        ],
-      ),
+              if (!_isAutoGeneratedLabel(widget.message))
+                Padding(
+                  padding: const EdgeInsets.only(top: AppTheme.spacingSm),
+                  child: Text(
+                    widget.message.content,
+                    style: TextStyle(
+                      color: widget.bubbleText,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 

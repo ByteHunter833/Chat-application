@@ -2,6 +2,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/foundation.dart' as foundation;
 import 'package:flutter/material.dart';
 
+import '../models/models.dart';
 import '../theme/app_theme.dart';
 
 class MessageInputField extends StatefulWidget {
@@ -9,16 +10,20 @@ class MessageInputField extends StatefulWidget {
   final VoidCallback onSend;
   final VoidCallback? onAttach;
   final ValueChanged<String>? onChanged;
-
+  final FocusNode? messageFocusNode;
+  final Message? replyTo;
+  final VoidCallback? onCancelReply;
   final bool isLoading;
 
   const MessageInputField({
     super.key,
+    required this.messageFocusNode,
     required this.controller,
     required this.onSend,
+    this.replyTo,
+    this.onCancelReply,
     this.onAttach,
     this.onChanged,
-
     this.isLoading = false,
   });
 
@@ -28,13 +33,11 @@ class MessageInputField extends StatefulWidget {
 
 class _MessageInputFieldState extends State<MessageInputField> {
   bool _hasText = false;
-  late final FocusNode _focusNode;
-  bool _isEmojiPickerVisible = false;
 
   @override
   void initState() {
     super.initState();
-    _focusNode = FocusNode()..addListener(_handleFocusChange);
+
     widget.controller.addListener(_updateHasText);
     _hasText = widget.controller.text.isNotEmpty;
   }
@@ -42,9 +45,7 @@ class _MessageInputFieldState extends State<MessageInputField> {
   @override
   void dispose() {
     widget.controller.removeListener(_updateHasText);
-    _focusNode
-      ..removeListener(_handleFocusChange)
-      ..dispose();
+
     super.dispose();
   }
 
@@ -66,33 +67,6 @@ class _MessageInputFieldState extends State<MessageInputField> {
 
     setState(() {
       _hasText = hasText;
-    });
-  }
-
-  void _handleFocusChange() {
-    if (_focusNode.hasFocus && _isEmojiPickerVisible) {
-      setState(() {
-        _isEmojiPickerVisible = false;
-      });
-    }
-  }
-
-  void _toggleEmojiPicker() {
-    if (widget.isLoading) {
-      return;
-    }
-
-    if (_isEmojiPickerVisible) {
-      setState(() {
-        _isEmojiPickerVisible = false;
-      });
-      _focusNode.requestFocus();
-      return;
-    }
-
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _isEmojiPickerVisible = true;
     });
   }
 
@@ -129,40 +103,35 @@ class _MessageInputFieldState extends State<MessageInputField> {
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppTheme.spacingMd,
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: TextField(
-                          controller: widget.controller,
-                          focusNode: _focusNode,
-                          maxLines: null,
-                          minLines: 1,
-                          enabled: !widget.isLoading,
-                          onChanged: widget.onChanged,
-                          decoration: InputDecoration(
-                            hintText: 'Message...',
-                            border: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                            ),
-                            hintStyle: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: isDark
-                                      ? AppTheme.darkTextSecondary
-                                      : AppTheme.lightTextSecondary,
-                                ),
+                      if (widget.replyTo != null)
+                        _ComposerReplyPreview(
+                          message: widget.replyTo!,
+                          isDark: isDark,
+                          onCancel: widget.onCancelReply,
+                        ),
+                      TextField(
+                        controller: widget.controller,
+                        focusNode: widget.messageFocusNode,
+                        maxLines: null,
+                        minLines: 1,
+                        enabled: !widget.isLoading,
+                        onChanged: widget.onChanged,
+                        decoration: InputDecoration(
+                          hintText: 'Message...',
+                          border: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
                           ),
+                          hintStyle: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: isDark
+                                    ? AppTheme.darkTextSecondary
+                                    : AppTheme.lightTextSecondary,
+                              ),
                         ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          _isEmojiPickerVisible
-                              ? Icons.keyboard_outlined
-                              : Icons.emoji_emotions_outlined,
-                        ),
-                        onPressed: _toggleEmojiPicker,
-                        color: AppTheme.primary,
                       ),
                     ],
                   ),
@@ -211,23 +180,80 @@ class _MessageInputFieldState extends State<MessageInputField> {
               ),
             ],
           ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            child: _isEmojiPickerVisible
-                ? Padding(
-                    key: const ValueKey('emoji-picker'),
-                    padding: const EdgeInsets.only(top: AppTheme.spacingMd),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                      child: EmojiPick(
-                        textEditingController: widget.controller,
-                        isDark: isDark,
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink(key: ValueKey('emoji-picker-hidden')),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComposerReplyPreview extends StatelessWidget {
+  const _ComposerReplyPreview({
+    required this.message,
+    required this.isDark,
+    this.onCancel,
+  });
+
+  final Message message;
+  final bool isDark;
+  final VoidCallback? onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final reply = MessageReply.fromMessage(message);
+    final previewTextColor = isDark
+        ? AppTheme.darkTextSecondary
+        : AppTheme.lightTextSecondary;
+
+    return Container(
+      margin: const EdgeInsets.only(top: AppTheme.spacingSm),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.spacingSm,
+        vertical: AppTheme.spacingSm,
+      ),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: isDark ? 0.16 : 0.08),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppTheme.primary,
+              borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+            ),
+          ),
+          const SizedBox(width: AppTheme.spacingSm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reply.senderDisplayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  reply.previewText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: previewTextColor, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Cancel reply',
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: onCancel,
           ),
         ],
       ),

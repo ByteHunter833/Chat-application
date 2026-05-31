@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lottie/lottie.dart';
 
@@ -18,10 +19,18 @@ import '../widgets/typing_indicator.dart';
 import 'profile_screen.dart';
 
 class ChatDetailScreen extends ConsumerStatefulWidget {
-  const ChatDetailScreen({super.key, required this.chat, this.isDraft = false});
+  const ChatDetailScreen({
+    super.key,
+    required this.chat,
+    this.isDraft = false,
+    this.showBackButton = true,
+    this.onClose,
+  });
 
   final Chat chat;
   final bool isDraft;
+  final bool showBackButton;
+  final VoidCallback? onClose;
 
   @override
   ConsumerState<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -40,9 +49,15 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   String _lastMarkedUnreadSignature = '';
   bool _didResetInitialUnreadCount = false;
   Timer? _typingDebounce;
+  Timer? _highlightTimer;
   bool _isTyping = false;
   bool _isDisposed = false;
   String? _currentUserId;
+  Message? _replyingToMessage;
+  String? _highlightedMessageId;
+  List<Message> _latestMessages = const <Message>[];
+  final Map<String, GlobalKey> _messageKeys = <String, GlobalKey>{};
+  final FocusNode _messageInputFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -55,25 +70,56 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant ChatDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.chat.id == widget.chat.id &&
+        oldWidget.isDraft == widget.isDraft) {
+      return;
+    }
+
+    _typingDebounce?.cancel();
+    _clearTypingOnDispose();
+    _chat = widget.chat;
+    _isDraft = widget.isDraft;
+    _isSending = false;
+    _isUploadingMedia = false;
+    _lastMessageCount = 0;
+    _lastMarkedUnreadSignature = '';
+    _didResetInitialUnreadCount = false;
+    _isTyping = false;
+    _currentUserId = null;
+    _replyingToMessage = null;
+    _highlightedMessageId = null;
+    _highlightTimer?.cancel();
+    _messageKeys.clear();
+    _latestMessages = const <Message>[];
+    _messageController.clear();
+  }
+
+  @override
   void dispose() {
     _isDisposed = true;
     _typingDebounce?.cancel();
+    _highlightTimer?.cancel();
     _clearTypingOnDispose();
     _messageController.dispose();
     _scrollController.dispose();
+    _messageInputFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _sendMessage() async {
-    final currentUser = ref.read(currentAppUserProvider).valueOrNull;
+    final currentUser = ref.read(currentAppUserProvider).value;
     final text = _messageController.text.trim();
     if (currentUser == null || text.isEmpty || _isSending) {
       return;
     }
 
+    final replyTo = _replyingToMessage;
     _currentUserId = currentUser.id;
     setState(() {
       _isSending = true;
+      _replyingToMessage = null;
     });
 
     _messageController.clear();
@@ -86,6 +132,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
               currentUser: currentUser,
               otherUser: _chat.otherUser,
               text: text,
+              replyTo: replyTo,
             );
         if (!mounted || _isDisposed) {
           return;
@@ -100,6 +147,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           chatId: _chat.id,
           sender: currentUser,
           text: text,
+          replyTo: replyTo,
         );
       }
     } catch (error) {
@@ -111,6 +159,9 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       _messageController.selection = TextSelection.collapsed(
         offset: _messageController.text.length,
       );
+      setState(() {
+        _replyingToMessage = replyTo;
+      });
 
       ScaffoldMessenger.of(
         context,
@@ -208,14 +259,14 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   }
 
   Future<void> _pickAndSendMedia() async {
-    final currentUser = ref.read(currentAppUserProvider).valueOrNull;
+    final currentUser = ref.read(currentAppUserProvider).value;
     if (currentUser == null || _isUploadingMedia || _isSending) {
       return;
     }
 
     _currentUserId = currentUser.id;
     final chatId = _chat.id;
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFiles(
       allowMultiple: false,
       withData: true,
       type: FileType.any,
@@ -224,8 +275,10 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       return;
     }
 
+    final replyTo = _replyingToMessage;
     setState(() {
       _isUploadingMedia = true;
+      _replyingToMessage = null;
     });
 
     unawaited(_setTyping(false));
@@ -257,9 +310,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
               displayText: displayText,
               type: upload.messageType,
               mediaUrl: upload.url,
+              mediaStoragePath: upload.storagePath,
               fileName: upload.fileName,
               mimeType: upload.mimeType,
               fileSize: upload.fileSize,
+              replyTo: replyTo,
             );
         if (!mounted || _isDisposed) {
           return;
@@ -276,15 +331,20 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           displayText: displayText,
           type: upload.messageType,
           mediaUrl: upload.url,
+          mediaStoragePath: upload.storagePath,
           fileName: upload.fileName,
           mimeType: upload.mimeType,
           fileSize: upload.fileSize,
+          replyTo: replyTo,
         );
       }
     } catch (error) {
       if (!mounted || _isDisposed) {
         return;
       }
+      setState(() {
+        _replyingToMessage = replyTo;
+      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Media upload failed: $error')));
@@ -295,6 +355,111 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
         });
       }
     }
+  }
+
+  void _startReply(Message message) {
+    if (message.type == MessageType.system) {
+      return;
+    }
+
+    HapticFeedback.selectionClick();
+    setState(() {
+      _replyingToMessage = message;
+    });
+    _messageInputFocusNode.requestFocus();
+  }
+
+  void _cancelReply() {
+    if (_replyingToMessage == null) {
+      return;
+    }
+
+    setState(() {
+      _replyingToMessage = null;
+    });
+  }
+
+  void _scrollToReply(MessageReply reply) {
+    final messageId = reply.messageId;
+    if (messageId.isEmpty) {
+      return;
+    }
+
+    final keyContext = _messageKeys[messageId]?.currentContext;
+    if (keyContext != null) {
+      _pulseMessage(messageId);
+      Scrollable.ensureVisible(
+        keyContext,
+        alignment: 0.28,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOut,
+      );
+      return;
+    }
+
+    final index = _latestMessages.indexWhere(
+      (message) => message.id == messageId,
+    );
+    if (index < 0 || !_scrollController.hasClients) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Original message is not available.')),
+      );
+      return;
+    }
+
+    final targetOffset = (index * 92.0).clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
+    );
+    _scrollController
+        .animateTo(
+          targetOffset,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        )
+        .then((_) {
+          if (!mounted || _isDisposed) {
+            return;
+          }
+          _pulseMessage(messageId);
+          _ensureMessageVisible(
+            messageId,
+            duration: const Duration(milliseconds: 180),
+          );
+        });
+  }
+
+  void _ensureMessageVisible(String messageId, {required Duration duration}) {
+    final context = _messageKeys[messageId]?.currentContext;
+    if (context == null) {
+      return;
+    }
+
+    Scrollable.ensureVisible(
+      context,
+      alignment: 0.28,
+      duration: duration,
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _pulseMessage(String messageId) {
+    if (!mounted || _isDisposed) {
+      return;
+    }
+
+    _highlightTimer?.cancel();
+    setState(() {
+      _highlightedMessageId = messageId;
+    });
+    _highlightTimer = Timer(const Duration(milliseconds: 1100), () {
+      if (!mounted || _isDisposed) {
+        return;
+      }
+      setState(() {
+        _highlightedMessageId = null;
+      });
+    });
   }
 
   void _handleComposerChanged(String value) {
@@ -386,17 +551,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     return parts.first.substring(0, 1).toUpperCase();
   }
 
-  void showUndoSnackbar(String message, VoidCallback onUndo) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text(message),
-
-        action: SnackBarAction(label: 'Undo', onPressed: onUndo),
-      ),
-    );
-  }
-
   void _showClearChatAndDeleteChatDialog(String username, String actionType) {
     showDialog(
       context: context,
@@ -427,13 +581,13 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
             ),
             TextButton(
               onPressed: () {
+                Navigator.pop(context);
                 if (actionType == 'delete') {
                   unawaited(_chatRepository.deleteChat(_chat.id));
-                  Navigator.pop(context);
+                  _closeScreen();
                 } else {
                   unawaited(_chatRepository.clearChatHistory(_chat.id));
                 }
-                Navigator.pop(context);
               },
               child: Text(actionType == 'clear' ? 'Clear' : 'Delete'),
             ),
@@ -461,17 +615,45 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     }
   }
 
+  void _closeScreen() {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+      return;
+    }
+
+    Navigator.pop(context);
+  }
+
+  Future<void> deleteMedia(String storagePath) async {
+    final currentUserId = ref.read(currentUserIdProvider);
+    if (currentUserId == null) {
+      return;
+    }
+
+    try {
+      await _storageRepository.deleteMedia(storagePath);
+    } catch (error) {
+      if (!mounted || _isDisposed) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete media: $error')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentUser = ref.watch(currentAppUserProvider).valueOrNull;
+    final currentUser = ref.watch(currentAppUserProvider).value;
     _currentUserId = currentUser?.id ?? _currentUserId;
     final liveUser = _chat.isGroup
         ? null
-        : ref.watch(userByIdProvider(_chat.otherUser.id)).valueOrNull;
+        : ref.watch(userByIdProvider(_chat.otherUser.id)).value;
     final presence = _chat.isGroup
         ? null
-        : ref.watch(userPresenceProvider(_chat.otherUser.id)).valueOrNull;
+        : ref.watch(userPresenceProvider(_chat.otherUser.id)).value;
     final otherUser = (liveUser ?? _chat.otherUser).applyPresence(presence);
     final messagesAsync = _isDraft
         ? null
@@ -485,7 +667,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                       otherUserId: _chat.otherUser.id,
                     )),
                   )
-                  .valueOrNull ??
+                  .value ??
               false;
     final statusText = _chat.isGroup
         ? _formatGroupStatus(_chat.members.length)
@@ -497,14 +679,16 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           );
     final titleText = _chat.isGroup ? _chat.displayName : otherUser.name;
     final avatarUrl = _chat.isGroup ? _chat.groupAvatar : otherUser.avatar;
-
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: widget.showBackButton,
+        leading: widget.showBackButton
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: _closeScreen,
+              )
+            : null,
         title: GestureDetector(
           onTap: _chat.isGroup
               ? null
@@ -594,6 +778,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                 ? _DraftGreetingView(otherUser: otherUser)
                 : messagesAsync!.when(
                     data: (messages) {
+                      _latestMessages = messages;
+                      _messageKeys.removeWhere(
+                        (messageId, _) =>
+                            !messages.any((message) => message.id == messageId),
+                      );
                       _scheduleScrollIfNeeded(messages.length);
                       _markMessagesAsReadIfNeeded(messages, currentUser?.id);
 
@@ -615,11 +804,57 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                         itemBuilder: (context, index) {
                           final message = messages[index];
                           final isOwn = message.senderId == currentUser?.id;
-                          return MessageBubble(
+                          final messageKey = _messageKeys.putIfAbsent(
+                            message.id,
+                            () => GlobalKey(),
+                          );
+                          final bubble = MessageBubble(
+                            onDeleteMedia: message.mediaStoragePath != null
+                                ? () => deleteMedia(message.mediaStoragePath!)
+                                : null,
                             message: message,
                             isOwn: isOwn,
                             showSenderInfo: _chat.isGroup && !isOwn,
+                            onReplyTap: message.replyTo == null
+                                ? null
+                                : () => _scrollToReply(message.replyTo!),
                           );
+                          final highlighted =
+                              _highlightedMessageId == message.id;
+                          final content = KeyedSubtree(
+                            key: messageKey,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOut,
+                              color: highlighted
+                                  ? AppTheme.primary.withValues(alpha: 0.12)
+                                  : Colors.transparent,
+                              child: message.type == MessageType.system
+                                  ? bubble
+                                  : Dismissible(
+                                      key: ValueKey('reply-${message.id}'),
+                                      direction: DismissDirection.horizontal,
+                                      dismissThresholds: const {
+                                        DismissDirection.startToEnd: 0.18,
+                                        DismissDirection.endToStart: 0.18,
+                                      },
+                                      background: _ReplySwipeBackground(
+                                        alignment: Alignment.centerLeft,
+                                      ),
+                                      secondaryBackground:
+                                          _ReplySwipeBackground(
+                                            alignment: Alignment.centerRight,
+                                          ),
+                                      confirmDismiss: (direction) async {
+                                        _startReply(message);
+                                        return false;
+                                      },
+                                      child: bubble,
+                                    ),
+                            ),
+                          );
+
+                          return content;
                         },
                       );
                     },
@@ -671,14 +906,45 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
               ),
             ),
             child: MessageInputField(
+              messageFocusNode: _messageInputFocusNode,
               controller: _messageController,
               onSend: _sendMessage,
               onAttach: _pickAndSendMedia,
               onChanged: _handleComposerChanged,
+              replyTo: _replyingToMessage,
+              onCancelReply: _cancelReply,
               isLoading: _isSending || _isUploadingMedia,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ReplySwipeBackground extends StatelessWidget {
+  const _ReplySwipeBackground({required this.alignment});
+
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLeft = alignment == Alignment.centerLeft;
+    return Container(
+      alignment: alignment,
+      padding: EdgeInsets.only(
+        left: isLeft ? AppTheme.spacingXl : 0,
+        right: isLeft ? 0 : AppTheme.spacingXl,
+      ),
+      color: AppTheme.primary.withValues(alpha: 0.08),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withValues(alpha: 0.14),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.reply, color: AppTheme.primary, size: 20),
       ),
     );
   }

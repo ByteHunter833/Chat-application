@@ -208,12 +208,14 @@ class ChatRepository {
     required User currentUser,
     required User otherUser,
     required String text,
+    Message? replyTo,
   }) {
     return _createOrGetDirectChatAndSendMessage(
       currentUser: currentUser,
       otherUser: otherUser,
       text: text,
       type: MessageType.text,
+      replyTo: replyTo,
     );
   }
 
@@ -223,9 +225,11 @@ class ChatRepository {
     required String displayText,
     required MessageType type,
     required String mediaUrl,
+    required String mediaStoragePath,
     required String fileName,
     required String mimeType,
     required int fileSize,
+    Message? replyTo,
   }) {
     return _createOrGetDirectChatAndSendMessage(
       currentUser: currentUser,
@@ -233,9 +237,11 @@ class ChatRepository {
       text: displayText,
       type: type,
       mediaUrl: mediaUrl,
+      mediaStoragePath: mediaStoragePath,
       fileName: fileName,
       mimeType: mimeType,
       fileSize: fileSize,
+      replyTo: replyTo,
     );
   }
 
@@ -300,6 +306,7 @@ class ChatRepository {
         'isRead': true,
         'type': MessageType.system.name,
         'mediaUrl': null,
+        'mediaStoragePath': null,
         'fileName': null,
         'mimeType': null,
         'fileSize': null,
@@ -322,12 +329,14 @@ class ChatRepository {
     required String chatId,
     required User sender,
     required String text,
+    Message? replyTo,
   }) async {
     await _sendMessage(
       chatId: chatId,
       sender: sender,
       text: text,
       type: MessageType.text,
+      replyTo: replyTo,
     );
   }
 
@@ -337,9 +346,11 @@ class ChatRepository {
     required String displayText,
     required MessageType type,
     required String mediaUrl,
+    required String mediaStoragePath,
     required String fileName,
     required String mimeType,
     required int fileSize,
+    Message? replyTo,
   }) async {
     await _sendMessage(
       chatId: chatId,
@@ -347,9 +358,11 @@ class ChatRepository {
       text: displayText,
       type: type,
       mediaUrl: mediaUrl,
+      mediaStoragePath: mediaStoragePath,
       fileName: fileName,
       mimeType: mimeType,
       fileSize: fileSize,
+      replyTo: replyTo,
     );
   }
 
@@ -374,10 +387,12 @@ class ChatRepository {
     required String text,
     required MessageType type,
     String? mediaUrl,
+    String? mediaStoragePath,
     String? fileName,
     String? mimeType,
     int? fileSize,
     String? messageId,
+    Message? replyTo,
   }) async {
     final trimmedText = text.trim();
     if (trimmedText.isEmpty) {
@@ -389,6 +404,7 @@ class ChatRepository {
         ? chatRef.collection('messages').doc()
         : chatRef.collection('messages').doc(messageId);
     final senderSnapshot = _senderSnapshot(sender);
+    final replySnapshot = _replySnapshot(replyTo);
 
     await _firestore.runTransaction((transaction) async {
       final chatSnapshot = await transaction.get(chatRef);
@@ -425,9 +441,11 @@ class ChatRepository {
         'isRead': false,
         'type': type.name,
         'mediaUrl': mediaUrl,
+        'mediaStoragePath': mediaStoragePath,
         'fileName': fileName,
         'mimeType': mimeType,
         'fileSize': fileSize,
+        'replyTo': replySnapshot,
       });
 
       transaction.set(chatRef, {
@@ -450,9 +468,11 @@ class ChatRepository {
     required String text,
     required MessageType type,
     String? mediaUrl,
+    String? mediaStoragePath,
     String? fileName,
     String? mimeType,
     int? fileSize,
+    Message? replyTo,
   }) async {
     final trimmedText = text.trim();
     if (trimmedText.isEmpty) {
@@ -464,6 +484,7 @@ class ChatRepository {
     final chatRef = _firestore.collection('chats').doc(chatId);
     final messageRef = chatRef.collection('messages').doc();
     final senderSnapshot = _senderSnapshot(currentUser);
+    final replySnapshot = _replySnapshot(replyTo);
 
     await _firestore.runTransaction((transaction) async {
       final chatSnapshot = await transaction.get(chatRef);
@@ -493,9 +514,11 @@ class ChatRepository {
         'isRead': false,
         'type': type.name,
         'mediaUrl': mediaUrl,
+        'mediaStoragePath': mediaStoragePath,
         'fileName': fileName,
         'mimeType': mimeType,
         'fileSize': fileSize,
+        'replyTo': replySnapshot,
       });
 
       transaction.set(chatRef, {
@@ -630,4 +653,12 @@ Map<String, Object?> _senderSnapshot(User sender) {
     'senderUsername': sender.username,
     'senderAvatar': sender.avatar,
   };
+}
+
+Map<String, Object?>? _replySnapshot(Message? replyTo) {
+  if (replyTo == null) {
+    return null;
+  }
+
+  return Map<String, Object?>.from(MessageReply.fromMessage(replyTo).toMap());
 }

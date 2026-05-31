@@ -32,8 +32,8 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final liveUser = ref.watch(userByIdProvider(userId)).valueOrNull;
-    final presence = ref.watch(userPresenceProvider(userId)).valueOrNull;
+    final liveUser = ref.watch(userByIdProvider(userId)).value;
+    final presence = ref.watch(userPresenceProvider(userId)).value;
     final displayUser =
         (liveUser ??
                 User(

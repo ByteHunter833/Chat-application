@@ -93,6 +93,100 @@ class User {
 
 enum MessageType { text, image, voice, video, file, system }
 
+class MessageReply {
+  final String messageId;
+  final String senderId;
+  final String? senderName;
+  final String? senderUsername;
+  final String content;
+  final MessageType type;
+  final String? fileName;
+
+  const MessageReply({
+    required this.messageId,
+    required this.senderId,
+    this.senderName,
+    this.senderUsername,
+    required this.content,
+    required this.type,
+    this.fileName,
+  });
+
+  factory MessageReply.fromMessage(Message message) {
+    return MessageReply(
+      messageId: message.id,
+      senderId: message.senderId,
+      senderName: message.senderName,
+      senderUsername: message.senderUsername,
+      content: message.content,
+      type: message.type,
+      fileName: message.fileName,
+    );
+  }
+
+  factory MessageReply.fromMap(dynamic value) {
+    final map = Map<String, dynamic>.from(
+      value as Map? ?? const <String, dynamic>{},
+    );
+    return MessageReply(
+      messageId: map['messageId'] as String? ?? '',
+      senderId: map['senderId'] as String? ?? '',
+      senderName: map['senderName'] as String?,
+      senderUsername: map['senderUsername'] as String?,
+      content: map['content'] as String? ?? '',
+      type: _messageTypeFromString(map['type'] as String?),
+      fileName: map['fileName'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'messageId': messageId,
+      'senderId': senderId,
+      'senderName': senderName,
+      'senderUsername': senderUsername,
+      'content': content,
+      'type': type.name,
+      'fileName': fileName,
+    };
+  }
+
+  String get senderDisplayName {
+    final name = senderName?.trim();
+    if (name != null && name.isNotEmpty) {
+      return name;
+    }
+
+    final username = senderUsername?.trim();
+    if (username != null && username.isNotEmpty) {
+      return '@$username';
+    }
+
+    return 'Message';
+  }
+
+  String get previewText {
+    final trimmedContent = content.trim();
+    if (trimmedContent.isNotEmpty) {
+      return trimmedContent;
+    }
+
+    final trimmedFileName = fileName?.trim();
+    if (trimmedFileName != null && trimmedFileName.isNotEmpty) {
+      return trimmedFileName;
+    }
+
+    return switch (type) {
+      MessageType.image => 'Photo',
+      MessageType.video => 'Video',
+      MessageType.voice => 'Voice message',
+      MessageType.file => 'File',
+      MessageType.system => 'System message',
+      MessageType.text => 'Message',
+    };
+  }
+}
+
 class UserPresence {
   const UserPresence({required this.isOnline, this.lastSeen});
 
@@ -120,9 +214,11 @@ class Message {
   final bool isRead;
   final MessageType type;
   final String? mediaUrl;
+  final String? mediaStoragePath;
   final String? fileName;
   final String? mimeType;
   final int? fileSize;
+  final MessageReply? replyTo;
 
   Message({
     required this.id,
@@ -136,12 +232,15 @@ class Message {
     this.isRead = false,
     this.type = MessageType.text,
     this.mediaUrl,
+    this.mediaStoragePath,
     this.fileName,
     this.mimeType,
     this.fileSize,
+    this.replyTo,
   });
 
   factory Message.fromMap(Map<String, dynamic> map, String id) {
+    final replyMap = map['replyTo'];
     return Message(
       id: id,
       chatId: map['chatId'] as String? ?? '',
@@ -154,9 +253,11 @@ class Message {
       isRead: map['isRead'] as bool? ?? false,
       type: _messageTypeFromString(map['type'] as String?),
       mediaUrl: map['mediaUrl'] as String?,
+      mediaStoragePath: map['mediaStoragePath'] as String?,
       fileName: map['fileName'] as String?,
       mimeType: map['mimeType'] as String?,
       fileSize: (map['fileSize'] as num?)?.toInt(),
+      replyTo: replyMap == null ? null : MessageReply.fromMap(replyMap),
     );
   }
 
@@ -172,9 +273,11 @@ class Message {
       'isRead': isRead,
       'type': type.name,
       'mediaUrl': mediaUrl,
+      'mediaStoragePath': mediaStoragePath,
       'fileName': fileName,
       'mimeType': mimeType,
       'fileSize': fileSize,
+      'replyTo': replyTo?.toMap(),
     };
   }
 
@@ -190,9 +293,12 @@ class Message {
     bool? isRead,
     MessageType? type,
     String? mediaUrl,
+    String? mediaStoragePath,
     String? fileName,
     String? mimeType,
     int? fileSize,
+    MessageReply? replyTo,
+    bool clearReplyTo = false,
   }) {
     return Message(
       id: id ?? this.id,
@@ -206,9 +312,11 @@ class Message {
       isRead: isRead ?? this.isRead,
       type: type ?? this.type,
       mediaUrl: mediaUrl ?? this.mediaUrl,
+      mediaStoragePath: mediaStoragePath ?? this.mediaStoragePath,
       fileName: fileName ?? this.fileName,
       mimeType: mimeType ?? this.mimeType,
       fileSize: fileSize ?? this.fileSize,
+      replyTo: clearReplyTo ? null : replyTo ?? this.replyTo,
     );
   }
 }

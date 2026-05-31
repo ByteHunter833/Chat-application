@@ -14,6 +14,7 @@ class ChatTile extends ConsumerWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onMute;
   final VoidCallback? onPin;
+  final bool isSelected;
 
   const ChatTile({
     super.key,
@@ -22,6 +23,7 @@ class ChatTile extends ConsumerWidget {
     this.onDelete,
     this.onMute,
     this.onPin,
+    this.isSelected = false,
   });
 
   @override
@@ -29,10 +31,10 @@ class ChatTile extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final liveUser = chat.isGroup
         ? null
-        : ref.watch(userByIdProvider(chat.otherUser.id)).valueOrNull;
+        : ref.watch(userByIdProvider(chat.otherUser.id)).value;
     final presence = chat.isGroup
         ? null
-        : ref.watch(userPresenceProvider(chat.otherUser.id)).valueOrNull;
+        : ref.watch(userPresenceProvider(chat.otherUser.id)).value;
     final otherUser = (liveUser ?? chat.otherUser).applyPresence(presence);
     final currentUserId = ref.watch(currentUserIdProvider);
     final isTyping = chat.isGroup
@@ -44,7 +46,7 @@ class ChatTile extends ConsumerWidget {
                       otherUserId: chat.otherUser.id,
                     )),
                   )
-                  .valueOrNull ??
+                  .value ??
               false;
     final canSwipeActions = onDelete != null || onMute != null;
     final previewText = _previewText(
@@ -66,8 +68,15 @@ class ChatTile extends ConsumerWidget {
           vertical: AppTheme.spacingSm,
         ),
         decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkSurface : AppTheme.lightSurface,
+          color: isSelected
+              ? AppTheme.primary.withValues(alpha: isDark ? 0.18 : 0.1)
+              : (isDark ? AppTheme.darkSurface : AppTheme.lightSurface),
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.primary.withValues(alpha: 0.5)
+                : Colors.transparent,
+          ),
         ),
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         child: Row(

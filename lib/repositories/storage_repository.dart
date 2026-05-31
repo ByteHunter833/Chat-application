@@ -8,6 +8,7 @@ class StorageRepository {
 
   static const String bucketName = 'chat-media';
   static const int maxUploadBytes = 20 * 1024 * 1024;
+  static const int signedUrlExpiresIn = 60 * 60 * 24 * 7;
 
   final SupabaseClient? _client;
 
@@ -52,8 +53,10 @@ class StorageRepository {
     final publicUrl = _client.storage
         .from(bucketName)
         .getPublicUrl(storagePath);
+    final mediaUrl = await _createSignedUrlOrNull(storagePath) ?? publicUrl;
     return UploadedMedia(
-      url: publicUrl,
+      url: mediaUrl,
+      storagePath: storagePath,
       fileName: file.name,
       mimeType: mimeType,
       fileSize: bytes.length,
@@ -63,6 +66,22 @@ class StorageRepository {
         mimeType: mimeType,
       ),
     );
+  }
+
+  Future<String> resolveMediaUrl({String? url, String? storagePath}) async {
+    final fallbackUrl = url?.trim();
+    final resolvedStoragePath =
+        _normalizeStoragePath(storagePath) ?? _storagePathFromUrl(fallbackUrl);
+    final signedUrl = await _createSignedUrlOrNull(resolvedStoragePath);
+    if (signedUrl != null) {
+      return signedUrl;
+    }
+
+    if (fallbackUrl != null && fallbackUrl.isNotEmpty) {
+      return fallbackUrl;
+    }
+
+    throw const StorageUploadException('Attachment URL is missing.');
   }
 
   Future<String> uploadGroupAvatar({
@@ -117,6 +136,42 @@ class StorageRepository {
       return '';
     }
     return fileName.substring(dotIndex + 1).toLowerCase();
+  }
+
+  Future<String?> _createSignedUrlOrNull(String? storagePath) async {
+    if (_client == null || storagePath == null || storagePath.isEmpty) {
+      return null;
+    }
+
+    try {
+      return await _client.storage
+          .from(bucketName)
+          .createSignedUrl(storagePath, signedUrlExpiresIn);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _normalizeStoragePath(String? storagePath) {
+    final trimmedPath = storagePath?.trim();
+    if (trimmedPath == null || trimmedPath.isEmpty) {
+      return null;
+    }
+    return trimmedPath;
+  }
+
+  String? _storagePathFromUrl(String? url) {
+    final uri = Uri.tryParse(url ?? '');
+    if (uri == null) {
+      return null;
+    }
+
+    final bucketIndex = uri.pathSegments.indexOf(bucketName);
+    if (bucketIndex == -1 || bucketIndex >= uri.pathSegments.length - 1) {
+      return null;
+    }
+
+    return uri.pathSegments.skip(bucketIndex + 1).join('/');
   }
 
   String _detectMimeType(String fileName) {
@@ -175,11 +230,24 @@ class StorageRepository {
         return MessageType.file;
     }
   }
+
+  Future<void> deleteMedia(String storagePath) async {
+    if (_client == null) {
+      throw const StorageNotConfiguredException();
+    }
+
+    try {
+      await _client.storage.from(bucketName).remove([storagePath]);
+    } catch (e) {
+      throw StorageUploadException('Failed to delete media: $e');
+    }
+  }
 }
 
 class UploadedMedia {
   const UploadedMedia({
     required this.url,
+    required this.storagePath,
     required this.fileName,
     required this.mimeType,
     required this.fileSize,
@@ -187,6 +255,7 @@ class UploadedMedia {
   });
 
   final String url;
+  final String storagePath;
   final String fileName;
   final String mimeType;
   final int fileSize;

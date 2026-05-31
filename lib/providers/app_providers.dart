@@ -49,23 +49,19 @@ final storageRepositoryProvider = Provider<StorageRepository>((ref) {
   return StorageRepository(client: client);
 });
 
-final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>((
-  ref,
-) {
-  return ThemeModeNotifier();
-});
+final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(
+  ThemeModeNotifier.new,
+);
 
 final authControllerProvider =
-    StateNotifierProvider<AuthController, AsyncValue<void>>((ref) {
-      return AuthController(ref.watch(authRepositoryProvider));
-    });
+    NotifierProvider<AuthController, AsyncValue<void>>(AuthController.new);
 
 final authStateChangesProvider = StreamProvider<auth.User?>((ref) {
   return ref.watch(authRepositoryProvider).authStateChanges();
 });
 
 final currentUserIdProvider = Provider<String?>((ref) {
-  return ref.watch(authStateChangesProvider).valueOrNull?.uid;
+  return ref.watch(authStateChangesProvider).value?.uid;
 });
 
 final currentAppUserProvider = StreamProvider<User?>((ref) {
@@ -125,23 +121,24 @@ final userSearchProvider = FutureProvider.family<List<User>, String>((
       .searchUsersByUsername(query: query, excludeUserId: currentUserId);
 });
 
-class ThemeModeNotifier extends StateNotifier<ThemeMode> {
-  ThemeModeNotifier() : super(ThemeMode.light);
+class ThemeModeNotifier extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() => ThemeMode.light;
 
   void toggle() {
     state = state == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
   }
 }
 
-class AuthController extends StateNotifier<AsyncValue<void>> {
-  AuthController(this._authRepository) : super(const AsyncData(null));
-
-  final AuthRepository _authRepository;
+class AuthController extends Notifier<AsyncValue<void>> {
+  @override
+  AsyncValue<void> build() => const AsyncData(null);
 
   Future<void> signIn({required String email, required String password}) async {
     state = const AsyncLoading();
+    final authRepository = ref.read(authRepositoryProvider);
     state = await AsyncValue.guard(
-      () => _authRepository.signIn(email: email, password: password),
+      () => authRepository.signIn(email: email, password: password),
     );
   }
 
@@ -152,8 +149,9 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     required String password,
   }) async {
     state = const AsyncLoading();
+    final authRepository = ref.read(authRepositoryProvider);
     state = await AsyncValue.guard(
-      () => _authRepository.signUp(
+      () => authRepository.signUp(
         name: name,
         username: username,
         email: email,
@@ -164,6 +162,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
 
   Future<void> signOut() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() => _authRepository.signOut());
+    final authRepository = ref.read(authRepositoryProvider);
+    state = await AsyncValue.guard(() => authRepository.signOut());
   }
 }

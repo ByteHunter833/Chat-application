@@ -21,7 +21,11 @@ class ChatListScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatListScreenState extends ConsumerState<ChatListScreen> {
+  static const double _splitLayoutBreakpoint = 900;
+
   final TextEditingController _searchController = TextEditingController();
+  Chat? _selectedChat;
+  bool _selectedChatIsDraft = false;
 
   @override
   void initState() {
@@ -58,7 +62,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
       return;
     }
 
-    final currentUser = ref.read(currentAppUserProvider).valueOrNull;
+    final currentUser = ref.read(currentAppUserProvider).value;
     if (currentUser == null) {
       return;
     }
@@ -76,12 +80,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
 
       final isDraft = existingChat?.lastMessage == null;
       final chat = existingChat ?? _buildDraftChat(currentUser, targetUser);
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ChatDetailScreen(chat: chat, isDraft: isDraft),
-        ),
-      );
+      _openChat(chat, isDraft: isDraft);
     } catch (error) {
       if (!mounted) {
         return;
@@ -105,6 +104,34 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     );
   }
 
+  void _openChat(Chat chat, {bool isDraft = false}) {
+    if (_usesSplitLayout(context)) {
+      setState(() {
+        _selectedChat = chat;
+        _selectedChatIsDraft = isDraft;
+      });
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatDetailScreen(chat: chat, isDraft: isDraft),
+      ),
+    );
+  }
+
+  void _clearSelectedChat() {
+    setState(() {
+      _selectedChat = null;
+      _selectedChatIsDraft = false;
+    });
+  }
+
+  bool _usesSplitLayout(BuildContext context) {
+    return MediaQuery.sizeOf(context).width >= _splitLayoutBreakpoint;
+  }
+
   Future<void> _signOut() async {
     await ref.read(authControllerProvider.notifier).signOut();
   }
@@ -118,97 +145,154 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // THEME & STATE
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final themeMode = ref.watch(themeModeProvider);
-    final currentUser = ref.watch(currentAppUserProvider).valueOrNull;
+    final currentUser = ref.watch(currentAppUserProvider).value;
     final chatsAsync = ref.watch(chatsProvider);
-    return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
-      appBar: _buildAppBar(context, currentUser, themeMode),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(AppTheme.spacingLg),
-            child: Container(
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.darkTertiary : AppTheme.lightTertiary,
-                borderRadius: BorderRadius.circular(AppTheme.radiusXl),
-                border: Border.all(
-                  color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final usesSplitLayout = constraints.maxWidth >= _splitLayoutBreakpoint;
+        final listBody = _buildChatListBody(
+          context,
+          chatsAsync: chatsAsync,
+          isDark: isDark,
+        );
+
+        if (!usesSplitLayout) {
+          return Scaffold(
+            backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
+            appBar: _buildAppBar(context, currentUser, themeMode),
+            body: listBody,
+            floatingActionButton: _buildFloatingActions(),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
+          body: Row(
+            children: [
+              Expanded(
+                child: Scaffold(
+                  backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
+                  appBar: _buildAppBar(context, currentUser, themeMode),
+                  body: listBody,
+                  floatingActionButton: _buildFloatingActions(),
                 ),
               ),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search by name or message...',
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spacingMd,
-                    vertical: AppTheme.spacingMd,
-                  ),
-                  prefixIcon: const Icon(Icons.search, color: AppTheme.primary),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: _searchController.clear,
-                        )
-                      : null,
+              Container(
+                width: 1,
+                color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+              ),
+              Expanded(child: _buildConversationPane(context)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildChatListBody(
+    BuildContext context, {
+    required AsyncValue<List<Chat>> chatsAsync,
+    required bool isDark,
+  }) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(AppTheme.spacingLg),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkTertiary : AppTheme.lightTertiary,
+              borderRadius: BorderRadius.circular(AppTheme.radiusXl),
+              border: Border.all(
+                color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
+              ),
+            ),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by name or message...',
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.spacingMd,
+                  vertical: AppTheme.spacingMd,
                 ),
+                prefixIcon: const Icon(Icons.search, color: AppTheme.primary),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: _searchController.clear,
+                      )
+                    : null,
               ),
             ),
           ),
-          Expanded(
-            child: chatsAsync.when(
-              data: (chats) => _buildChatsList(
-                context,
-                chats: _filterChats(chats),
-                isDark: isDark,
-              ),
-              loading: () => ListView.builder(
-                itemCount: 6,
-                itemBuilder: (context, index) => const ChatTileSkeleton(),
-              ),
-              error: (error, stackTrace) => ErrorStateWidget(
-                title: 'Unable to load chats',
-                subtitle: error.toString(),
-                onRetry: () => ref.invalidate(chatsProvider),
-              ),
+        ),
+        Expanded(
+          child: chatsAsync.when(
+            data: (chats) => _buildChatsList(
+              context,
+              chats: _filterChats(chats),
+              isDark: isDark,
+            ),
+            loading: () => ListView.builder(
+              itemCount: 6,
+              itemBuilder: (context, index) => const ChatTileSkeleton(),
+            ),
+            error: (error, stackTrace) => ErrorStateWidget(
+              title: 'Unable to load chats',
+              subtitle: error.toString(),
+              onRetry: () => ref.invalidate(chatsProvider),
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFloatingActions() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        FloatingActionButton.small(
+          heroTag: 'create_group',
+          tooltip: 'New group',
+          backgroundColor: AppTheme.accent,
+          foregroundColor: Colors.white,
+          onPressed: _openCreateGroupProcess,
+          child: const Icon(CupertinoIcons.person_2_fill),
+        ),
+        const SizedBox(height: AppTheme.spacingMd),
+        FloatingActionButton.extended(
+          heroTag: 'new_chat',
+          backgroundColor: AppTheme.primary,
+          onPressed: _showStartChatSheet,
+          icon: const Icon(Icons.alternate_email_rounded, color: Colors.white),
+          label: const Text(
+            'New chat',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConversationPane(BuildContext context) {
+    final selectedChat = _selectedChat;
+    if (selectedChat == null) {
+      return _ConversationPlaceholder(onStartChat: _showStartChatSheet);
+    }
+
+    return ChatDetailScreen(
+      key: ValueKey(
+        '${selectedChat.id}-${_selectedChatIsDraft ? 'draft' : 'active'}',
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'create_group',
-            tooltip: 'New group',
-            backgroundColor: AppTheme.accent,
-            foregroundColor: Colors.white,
-            onPressed: _openCreateGroupProcess,
-            child: const Icon(CupertinoIcons.person_2_fill),
-          ),
-          const SizedBox(height: AppTheme.spacingMd),
-          FloatingActionButton.extended(
-            heroTag: 'new_chat',
-            backgroundColor: AppTheme.primary,
-            onPressed: _showStartChatSheet,
-            icon: const Icon(
-              Icons.alternate_email_rounded,
-              color: Colors.white,
-            ),
-            label: const Text(
-              'New chat',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
+      chat: selectedChat,
+      isDraft: _selectedChatIsDraft,
+      showBackButton: false,
+      onClose: _clearSelectedChat,
     );
   }
 
@@ -395,12 +479,76 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         final chat = chats[index];
         return ChatTile(
           chat: chat,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => ChatDetailScreen(chat: chat)),
-          ),
+          isSelected: _selectedChat?.id == chat.id,
+          onTap: () => _openChat(chat),
         );
       }, childCount: chats.length),
+    );
+  }
+}
+
+class _ConversationPlaceholder extends StatelessWidget {
+  const _ConversationPlaceholder({required this.onStartChat});
+
+  final VoidCallback onStartChat;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final secondaryColor = isDark
+        ? AppTheme.darkTextSecondary
+        : AppTheme.lightTextSecondary;
+
+    return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBg : AppTheme.lightBg,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppTheme.spacingXl),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 88,
+                    height: 88,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.primary.withValues(alpha: 0.1),
+                    ),
+                    child: const Icon(
+                      Icons.forum_outlined,
+                      color: AppTheme.primary,
+                      size: 42,
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingXl),
+                  Text(
+                    "Choose who you'd like to message",
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: AppTheme.spacingSm),
+                  Text(
+                    'Select a conversation from the list or start a new chat.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: secondaryColor),
+                  ),
+                  const SizedBox(height: AppTheme.spacingXl),
+                  ElevatedButton.icon(
+                    onPressed: onStartChat,
+                    icon: const Icon(Icons.alternate_email_rounded),
+                    label: const Text('Start chat'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
