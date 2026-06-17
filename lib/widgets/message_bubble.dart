@@ -389,6 +389,7 @@ class _ReplyQuote extends StatelessWidget {
   }
 }
 
+//Widget to preview attachments in messages, handles loading the media URL and displaying a fallback if it fails
 class _AttachmentPreview extends ConsumerStatefulWidget {
   const _AttachmentPreview({
     required this.message,
@@ -536,6 +537,7 @@ class _AttachmentPreviewState extends ConsumerState<_AttachmentPreview> {
   }
 }
 
+//Fallback widget for attachments that fail to load or don't have a valid URL
 class _AttachmentFallback extends StatelessWidget {
   const _AttachmentFallback({
     required this.icon,
